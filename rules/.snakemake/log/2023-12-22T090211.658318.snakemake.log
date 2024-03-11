@@ -1,0 +1,14 @@
+Full Traceback (most recent call last):
+  File "/net/eichler/vol26/15000/nobackups/software/modules-sw/miniconda/23.5.2/Linux/CentOS7/x86_64/envs/python3/lib/python3.10/site-packages/snakemake/__init__.py", line 671, in snakemake
+    workflow.include(
+  File "/net/eichler/vol26/15000/nobackups/software/modules-sw/miniconda/23.5.2/Linux/CentOS7/x86_64/envs/python3/lib/python3.10/site-packages/snakemake/workflow.py", line 1389, in include
+    exec(compile(code, snakefile.get_path_or_uri(), "exec"), self.globals)
+  File "/net/eichler/vol28/home/yjkwon5/nobackups/pipelines/assembly_qc/1.1/Snakefile-yj", line 16, in <module>
+    configfile: "config/config_asm_qc.yaml"
+  File "/net/eichler/vol26/15000/nobackups/software/modules-sw/miniconda/23.5.2/Linux/CentOS7/x86_64/envs/python3/lib/python3.10/site-packages/snakemake/workflow.py", line 1462, in configfile
+    raise WorkflowError(
+snakemake.exceptions.WorkflowError: Workflow defines configfile config/config_asm_qc.yaml but it is not present or accessible (full checked path: /net/eichler/vol28/home/yjkwon5/nobackups/pipelines/assembly_qc/1.1/rules/config/config_asm_qc.yaml).
+
+WorkflowError in file /net/eichler/vol28/home/yjkwon5/nobackups/pipelines/assembly_qc/1.1/Snakefile-yj, line 16:
+Workflow defines configfile config/config_asm_qc.yaml but it is not present or accessible (full checked path: /net/eichler/vol28/home/yjkwon5/nobackups/pipelines/assembly_qc/1.1/rules/config/config_asm_qc.yaml).
+  File "/net/eichler/vol28/home/yjkwon5/nobackups/pipelines/assembly_qc/1.1/Snakefile-yj", line 16, in <module>

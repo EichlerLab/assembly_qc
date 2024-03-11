@@ -1,0 +1,17 @@
+### general
+MANIFEST: config/manifest_asm_qc.tab
+REF: /net/eichler/vol28/eee_shared/assemblies/CHM13/T2T/v2.0/T2T-CHM13v2.fasta
+
+### saffire
+ALIGNER:
+  - minimap2
+#  - winnomap
+
+### compleasm
+VERSION: 0.2.2
+LINEAGE: primates
+MODE: busco
+
+### foreign contamination screening
+TAXID: 9606
+
