@@ -54,14 +54,12 @@ def agg_reads(wildcards):
     )
 
 
-def find_hap_one(wildcards):
+def find_cleaned_hap_one(wildcards):
     return f"QC_results/contamination_screening/results/{wildcards.asm}_hap1/fasta/{wildcards.asm}_hap1.fasta"
-#    return manifest_df.at[wildcards.asm, "H1"]
 
 
-def find_hap_two(wildcards):
-    return f"QC_results/contamination_screening/results/{wildcards.asm}_hap1/fasta/{wildcards.asm}_hap1.fasta"
-#    return manifest_df.at[wildcards.asm, "H2"]
+def find_cleaned_hap_two(wildcards):
+    return f"QC_results/contamination_screening/results/{wildcards.asm}_hap2/fasta/{wildcards.asm}_hap2.fasta"
 
 
 def find_meryl(wildcards):
@@ -193,11 +191,11 @@ rule meryl_combine:
 rule merqury_script:
     input:
         meryl=find_meryl,
-        hap_one=find_hap_one,
+        hap_one=find_cleaned_hap_one,
     output:
         run_script="QC_results/merqury/results/{asm}/{asm}_run.sh",
     params:
-        hap_two=find_hap_two,
+        hap_two=find_cleaned_hap_two,
     resources:
         mem=4,
         hrs=2,
@@ -274,8 +272,8 @@ rule merqury_trio_script:
     input:
         hapmer_flag=rules.agg_hapmers.output.hflag,
         asm_meryl=find_meryl,
-        hap_one=find_hap_one,
-        hap_two=find_hap_two,
+        hap_one=find_cleaned_hap_one,
+        hap_two=find_cleaned_hap_two,
     output:
         run_script="QC_results/merqury/results/{asm}/trio/{asm}_run.sh",
     params:

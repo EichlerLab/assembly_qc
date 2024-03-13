@@ -325,11 +325,7 @@ rule trim_sequence:
         hrs=12,
     shell:
         """
-        if [[ $( wc -l {input.regions_file} | awk '{{print $1}}' ) == 0 ]]; then
-            rsync -av {input.asm} {output.cleaned_fasta}
-        else
-            samtools faidx -r {input.regions_file} {input.asm} | sed 's/:/#/g' > {output.cleaned_fasta}
-        fi 
+        samtools faidx -r {input.regions_file} {input.asm} | sed 's/:/#/g' > {output.cleaned_fasta}
         samtools faidx {output.cleaned_fasta} 
         """
 
@@ -396,9 +392,8 @@ rule split_rdna:
         others=rules.filter_rdna.output.other_ctg,
     output:
         cleaned_fasta="QC_results/contamination_screening/results/{sample}/fasta/{sample}.fasta",
-        cleaned_fai="QC_results/contamination_screening/results/{sample}/fasta/{sample}.fasta.fai",
         rdna_fasta="QC_results/contamination_screening/results/{sample}/fasta/{sample}-rdna.fasta",
-        rdna_fai="QC_results/contamination_screening/results/{sample}/fasta/{sample}-rdna.fasta.fai",
+        cleaned_fai="QC_results/contamination_screening/results/{sample}/fasta/{sample}.fasta.fai",
     threads: 1
     log:
         "log/filter_rdna_{sample}.log",
@@ -414,10 +409,12 @@ rule split_rdna:
     shell:
         """
         if [[ $( wc -l {input.rdna} | awk '{{print $1}}' ) == 0 ]]; then
-            cp -l {input.fasta} {output.cleaned_fasta}
+            cp {input.fasta} {output.cleaned_fasta}
             touch {output.rdna_fasta}
         else
             samtools faidx -r {input.rdna} {input.fasta} > {output.rdna_fasta}
             samtools faidx -r {input.others} {input.fasta} > {output.cleaned_fasta}
         fi 
+        samtools faidx {output.cleaned_fasta}
         """
+

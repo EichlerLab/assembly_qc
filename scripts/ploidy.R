@@ -8,7 +8,7 @@ h2.paf<-args[4]
 out_pdf<-args[5]
 out_summary<-args[6]
 
-source(paste(snakemake_dir,'scripts/processAssemblyAlignments_functions.R', sep="/"))
+source(paste(snakemake_dir,'processAssemblyAlignments_functions.R', sep="/"))
 
 cat(paste("\n##SAMPLE NAME:",sample,"\n"))
 

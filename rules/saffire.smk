@@ -337,7 +337,7 @@ rule make_bed:
         hrs = 1
     shell:
         '''
-        awk -vOFS="\t" "{{print $6,$8,$9,$1,$12}}" {input.paf} | bedtools sort -g {params.genome_index} -i - > {output.bed}
+        awk -vOFS="\t" '{{print $6,$8,$9,$1,$12}}' {input.paf} | bedtools sort -g {params.genome_index} -i - > {output.bed}
         '''
 
 rule split_paf:
