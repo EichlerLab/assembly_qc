@@ -113,6 +113,7 @@ rule make_ploidy_plot:
         "modules-gs/prod",
         "modules-eichler/prod",
         "miniconda/4.12.0",
+        "ploidyplot/1.0.0",
     shell:
         '''
         Rscript {params.script_path} {params.snakemake_dir} {wildcards.asm} {input.hap_one_paf} {input.hap_two_paf} {output.pdf} {output.summary}
