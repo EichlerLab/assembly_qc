@@ -8,7 +8,7 @@ ALIGNER:
 #  - winnomap
 
 ### compleasm
-VERSION: 0.2.2
+MB_DOWNLOADS: /net/eichler/vol28/software/modules-sw/compleasm/0.2.2/Linux/CentOS7/x86_64/compleasm_kit/mb_download/
 LINEAGE: primates
 MODE: busco
 
