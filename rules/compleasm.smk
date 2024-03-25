@@ -8,7 +8,7 @@ MANIFEST = config.get("MANIFEST", "config/manifest.tab")
 
 MODE = config.get("MODE", "lite")
 LINEAGE = config.get("LINEAGE", "primates")
-VERSION = config.get("VERSION", "0.2.2")
+MB_DOWNLOADS = config.get("MB_DOWNLOADS", "/net/eichler/vol28/software/modules-sw/compleasm/0.2.2/Linux/CentOS7/x86_64/compleasm_kit/mb_download/")
 
 SNAKEMAKE_DIR = os.path.dirname(workflow.snakefile)
 
@@ -49,7 +49,7 @@ rule compleasm_run:
         mem=16,
         hrs=2,
     params:
-        mb_downloads=f"/net/eichler/vol28/software/modules-sw/compleasm/{VERSION}/Linux/CentOS7/x86_64/compleasm_kit/mb_downloads/",
+        mb_downloads=MB_DOWNLOADS,
         mode=MODE,
         lineage=LINEAGE,
     envmodules:
@@ -58,7 +58,7 @@ rule compleasm_run:
         "modules-gs/prod",
         "modules-eichler/prod",
         "miniconda/4.9.2",
-        f"compleasm/{VERSION}"
+        f"compleasm/0.2.2"
     shell:
         """
         compleasm.py run -a {input.asm_fasta} -o QC_results/compleasm/results/{wildcards.sample} -t {threads} -l {params.lineage} -m {params.mode} -L {params.mb_downloads}
