@@ -55,12 +55,6 @@ rule make_contig_stats:
         hrs = 12,
     params:
         script_path = N50_SCRIPT
-    envmodules:
-        "modules",
-        "modules-init",
-        "modules-gs/prod",
-        "modules-eichler/prod",
-        "miniconda/4.12.0",
     shell:
         '''
         {params.script_path} {input.asm_fasta} -p {output.scatter_plot} -d {output.dist_plot} -t {wildcards.sample} -l > {output.n50_stats}
@@ -80,12 +74,6 @@ rule make_ideo_plot:
         hrs = 1,
     params:
         script_path = IDEO_PLOT_SCRIPT,
-    envmodules:
-        "modules",
-        "modules-init",
-        "modules-gs/prod",
-        "modules-eichler/prod",
-        "miniconda/4.12.0",
     shell:
         '''
         {params.script_path} --asm1 {input.hap_one_bed} --asm2 {input.hap_two_bed} -r chm13 -s {wildcards.asm} -o {output.pdf}
@@ -107,13 +95,8 @@ rule make_ploidy_plot:
     params:
         script_path = PLOIDY_PLOT_SCRIPT,
         snakemake_dir = f"{SNAKEMAKE_DIR}/../scripts",
-    envmodules:
-        "modules",
-        "modules-init",
-        "modules-gs/prod",
-        "modules-eichler/prod",
-        "miniconda/4.12.0",
-        "ploidyplot/1.0.0",
+    singularity:
+        "docker://eichlerlab/binf-rplot:0.1"
     shell:
         '''
         Rscript {params.script_path} {params.snakemake_dir} {wildcards.asm} {input.hap_one_paf} {input.hap_two_paf} {output.pdf} {output.summary}

@@ -109,15 +109,9 @@ checkpoint run_fcs:
     benchmark: "QC_results/contamination_screening/benchmarks/fcs_gx/{sample}.tsv"
     params:
         taxid=TAXID,
-        GXDB_LOC="/tmp/GXDB/gxdb/",
+        GXDB_LOC="/data/scratch/GXDB/gxdb/",
         fcs_img=f"{SOURCE_DIR}/images/fcs-gx.sif",
         fcs_script=f"{SOURCE_DIR}/fcs.py",
-    envmodules:
-        "modules",
-        "modules-init",
-        "modules-gs/prod",
-        "modules-eichler/prod",
-        "miniconda/4.9.2",
     shell:
         """
         python3 {params.fcs_script} --image {params.fcs_img} screen genome --fasta {input.asm_fasta} --out-dir $( dirname {output.flag} ) --gx-db {params.GXDB_LOC}  --tax-id {params.taxid}
@@ -159,12 +153,7 @@ rule blast_mito:
     resources:
         mem=4,
         hrs=12,
-    envmodules:
-        "modules",
-        "modules-init",
-        "modules-gs/prod",
-        "modules-eichler/prod",
-        "ncbi-blast/2.15.0",
+    singularity: "docker://eichlerlab/ncbi-tk:0.1"
     shell:
         """
         blastn -query {input.asm_fasta} -db {input.mito_db} -outfmt 6 -evalue 1e-30 > {output.blast_out}
@@ -183,12 +172,7 @@ rule filter_mito:
     resources:
         mem=4,
         hrs=12,
-    envmodules:
-        "modules",
-        "modules-init",
-        "modules-gs/prod",
-        "modules-eichler/prod",
-        "bedtools/2.29.0",
+    singularity: "docker://eichlerlab/binf-basics:0.1"
     shell:
         """
         bedtools coverage -a <( awk -vOFS="\\t" '{{print $1,"0",$2}}' {input.fai} ) -b <( cut -f 1,7,8 {input.blast_out} ) | awk -vOFS="\\t" '{{ if ($NF >= 0.5) print $1,$2,$3}}' > {output.mito_bed}
@@ -292,12 +276,7 @@ rule coerce_bed:
     resources:
         mem=4,
         hrs=12,
-    envmodules:
-        "modules",
-        "modules-init",
-        "modules-gs/prod",
-        "modules-eichler/prod",
-        "bedtools/2.29.0",
+    singularity: "docker://eichlerlab/binf-basics:0.1"
     shell:
         """
         bedtools complement -i <( sort -k1,1 -k2,2n {input.trim_file} ) -g <( sort -k1 {input.fai} ) | awk '{{if ( $3 - $2 > 1000 ) print $1":"$2+1"-"$3}}' | sort > {output.regions_file}
@@ -314,12 +293,7 @@ rule trim_sequence:
     threads: 1
     log:
         "log/trim_sequence_{sample}.log",
-    envmodules:
-        "modules",
-        "modules-init",
-        "modules-gs/prod",
-        "modules-eichler/prod",
-        "samtools/1.12",
+    singularity: "docker://eichlerlab/binf-basics:0.1"
     resources:
         mem=4,
         hrs=12,
@@ -342,12 +316,7 @@ rule blast_rdna:
     resources:
         mem=4,
         hrs=12,
-    envmodules:
-        "modules",
-        "modules-init",
-        "modules-gs/prod",
-        "modules-eichler/prod",
-        "ncbi-blast/2.15.0",
+    singularity: "docker://eichlerlab/ncbi-tk:0.1"
     shell:
         """
         blastn -query {input.asm_fasta} -db {input.rdna_db} -outfmt 6 -evalue 1e-30 > {output.blast_out}
@@ -367,12 +336,7 @@ rule filter_rdna:
     resources:
         mem=4,
         hrs=12,
-    envmodules:
-        "modules",
-        "modules-init",
-        "modules-gs/prod",
-        "modules-eichler/prod",
-        "bedtools/2.29.0",
+    singularity: "docker://eichlerlab/binf-basics:0.1"
     shell:
         """
         bedtools coverage -a <( awk -vOFS="\\t" '{{print $1,"0",$2}}' {input.fai} ) -b <( cut -f 1,7,8 {input.blast_out} ) | awk -vOFS="\\t" '{{ if ($NF >= 0.95) print $1}}' > {output.rdna_ctg}
@@ -400,12 +364,7 @@ rule split_rdna:
     resources:
         mem=4,
         hrs=12,
-    envmodules:
-        "modules",
-        "modules-init",
-        "modules-gs/prod",
-        "modules-eichler/prod",
-        "samtools/1.19",
+    singularity: "docker://eichlerlab/binf-basics:0.1"
     shell:
         """
         if [[ $( wc -l {input.rdna} | awk '{{print $1}}' ) == 0 ]]; then

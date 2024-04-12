@@ -151,12 +151,8 @@ rule run_meryl:
         mem=lambda wildcards, attempt: attempt * 120,
         hrs=48,
     threads: 1
-    envmodules:
-        "modules",
-        "modules-init",
-        "modules-gs/prod",
-        "modules-eichler/prod",
-        "meryl/1.0",
+    singularity:
+        "docker://eichlerlab/merqury:1.3.1"
     shell:
         """
         meryl k=21 count memory={resources.mem} {input.fastq} output {output.meryl}
@@ -172,12 +168,8 @@ rule meryl_combine:
         mem=8,
         hrs=48,
     threads: 1
-    envmodules:
-        "modules",
-        "modules-init",
-        "modules-gs/prod",
-        "modules-eichler/prod",
-        "meryl/1.0",
+    singularity:
+        "docker://eichlerlab/merqury:1.3.1"
     shell:
         """
         if [[ $( echo {input.meryl} | wc -w ) == 1 ]]; then
@@ -223,19 +215,8 @@ rule merqury_run:
         mem=4,
         hrs=96,
     threads: 16
-    envmodules:
-        "modules",
-        "modules-init",
-        "modules-gs/prod",
-        "modules-eichler/prod",
-        "pcre2/10.35",
-        "hdf5/1.10.1",
-        "R/4.0.0",
-        "meryl/1.0",
-        "samtools/1.12",
-        "bedtools/2.28.0",
-        "igvtools/2.8.2",
-        "merqury/1.1",
+    singularity:
+        "docker://eichlerlab/merqury:1.3.1"
     shell:
         """
         pushd QC_results/merqury/results/{wildcards.asm}/; ./$( basename {input.run_script} ); popd
@@ -253,6 +234,8 @@ rule hapmers:
         mem=4,
         hrs=96,
     threads: 8
+    singularity:
+        "docker://eichlerlab/merqury:1.3.1"
     shell:
         """
         pushd $( dirname {output.inherited_hist} )
@@ -303,19 +286,8 @@ rule merqury_trio_run:
         mem=4,
         hrs=96,
     threads: 16
-    envmodules:
-        "modules",
-        "modules-init",
-        "modules-gs/prod",
-        "modules-eichler/prod",
-        "pcre2/10.35",
-        "hdf5/1.10.1",
-        "R/4.0.0",
-        "meryl/1.0",
-        "samtools/1.12",
-        "bedtools/2.28.0",
-        "igvtools/2.8.2",
-        "merqury/1.1",
+    singularity:
+        "docker://eichlerlab/merqury:1.3.1"
     shell:
         """
         pushd QC_results/merqury/results/{wildcards.asm}/trio; ./$( basename {input.run_script} ); popd
