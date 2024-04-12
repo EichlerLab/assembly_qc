@@ -77,12 +77,8 @@ rule get_meryl_db:
     output:
         meryl_db_name = directory(f"QC_results/saffire/merylDB/{REF_NAME}"),
     threads: 1
-    envmodules:
-        "modules",
-        "modules-init",
-        "modules-gs/prod",
-        "modules-eichler/prod",
-        "meryl/1.0",
+    singularity:
+        "docker://eichlerlab/merqury/1.3.1"
     resources: 
         mem = 16,
         hrs = 72
@@ -97,12 +93,8 @@ rule get_kmer_count:
     output:
         kmer_count = f"QC_results/saffire/merylDB/repetitive_k19_{REF_NAME}.txt"
     threads: 1
-    envmodules:
-        "modules",
-        "modules-init",
-        "modules-gs/prod",
-        "modules-eichler/prod",
-        "meryl/1.0",
+    singularity:
+        "docker://eichlerlab/merqury/1.3.1"
     resources: 
         mem = 8,
         hrs = 72
@@ -159,13 +151,8 @@ rule split_fasta:
         hrs=24,
         disk_free=1,
     threads: 4
-    envmodules:
-        "modules",
-        "modules-init",
-        "modules-gs/prod",
-        "modules-eichler/prod",
-        "winnowmap/2.03",
-        "samtools/1.12",
+    singularity:
+        "docker://eichlerlab/binf-basics:0.1"
     shell:
         """
         samtools faidx {input.fasta} -r {input.batch_file} > {output.scatter_fasta}        
@@ -188,13 +175,8 @@ rule make_winnowmap_scatter_paf:
         disk_free=5,
     params:
         map_opts = MINIMAP_PARAMS,
-    envmodules:
-        "modules",
-        "modules-init",
-        "modules-gs/prod",
-        "modules-eichler/prod",
-        "winnowmap/2.03",
-        "samtools/1.12",
+    singularity:
+        "docker://eichlerlab/align-basics:0.1"
     threads: 12,
     shell:
         """
@@ -218,12 +200,8 @@ rule make_winnowmap_scatter_sam:
         disk_free=5,
     params:
         map_opts = MINIMAP_PARAMS,
-    envmodules:
-        "modules",
-        "modules-init",
-        "modules-gs/prod",
-        "modules-eichler/prod",
-        "winnowmap/2.03",
+    singularity:
+        "docker://eichlerlab/align-basics:0.1"
     threads: 8
     shell:
         """
@@ -239,12 +217,8 @@ rule combine_winnowmap_scatter_sam:
         mem=12,
         hrs=48,
         disk_free=5,
-    envmodules:
-        "modules",
-        "modules-init",
-        "modules-gs/prod",
-        "modules-eichler/prod",
-        "samtools/1.12",
+    singularity:
+        "docker://eichlerlab/binf-basics:0.1"
     threads: 8
     shell:
         """
@@ -279,12 +253,8 @@ rule make_minimap_paf:
     threads: 8
     params:
         map_opts = MINIMAP_PARAMS,
-    envmodules:
-        "modules",
-        "modules-init",
-        "modules-gs/prod",
-        "modules-eichler/prod",
-        "minimap2/2.24",
+    singularity:
+        "docker://eichlerlab/align-basics:0.1"
     resources: 
         mem = 12,
         hrs = 120
@@ -303,13 +273,8 @@ rule make_minimap_bam:
     threads: 8
     params:
         map_opts = MINIMAP_PARAMS,
-    envmodules:
-        "modules",
-        "modules-init",
-        "modules-gs/prod",
-        "modules-eichler/prod",
-        "minimap2/2.24",
-        "samtools/1.12",
+    singularity:
+        "docker://eichlerlab/align-basics:0.1"
     resources: 
         mem = 60,
         hrs = 120
@@ -326,12 +291,8 @@ rule make_bed:
     params:
         genome_index = GENOME_INDEX
     threads: 1
-    envmodules:
-        "modules",
-        "modules-init",
-        "modules-gs/prod",
-        "modules-eichler/prod",
-        "bedtools/2.29.0",
+    singularity:
+        "docker://eichlerlab/align-basics:0.1"
     resources: 
         mem = 12,
         hrs = 1
@@ -381,12 +342,8 @@ rule trim_break_orient_paf:
         contig = temp('QC_results/saffire/tmp/{sample}.{aligner}.{scatteritem}.orient.paf'),
         broken = temp('QC_results/saffire/tmp/{sample}.{aligner}.{scatteritem}.broken.paf')
     threads: 1
-    envmodules:
-        "modules",
-        "modules-init",
-        "modules-gs/prod",
-        "modules-eichler/prod",
-        "rustybam/0.1.27"
+    singularity:
+        "docker://eichlerlab/rustybam:0.1.33"
     resources: 
         mem = 24,
         hrs = 24
@@ -403,12 +360,6 @@ rule combine_paf:
     output:
         paf = 'QC_results/saffire/tmp/{sample}.{aligner}.broken.paf'
     threads: 1
-    envmodules:
-        "modules",
-        "modules-init",
-        "modules-gs/prod",
-        "modules-eichler/prod",
-        "rustybam/0.1.27"
     resources: 
         mem = 8,
         hrs = 24
@@ -423,12 +374,8 @@ rule saff_out:
     output:
         saf = 'QC_results/saffire/results/{sample}/{sample}.{aligner}.saf'
     threads: 1
-    envmodules:
-        "modules",
-        "modules-init",
-        "modules-gs/prod",
-        "modules-eichler/prod",
-        "rustybam/0.1.27"
+    singularity:
+        "docker://eichlerlab/rustybam:0.1.33"
     resources:
         mem = 8,
         hrs = 24
