@@ -1,2 +1,2 @@
-SAMPLE	H1	H2	ILLUMINA	FOFN	TRIO	MO_ID	FA_ID
-TEST  TEST.assembly.haplotype1.fasta	TEST.haplotype2.fasta	TEST	TEST_illumina.fofn	NO	NA	NA
+SAMPLE	H1	H2	UNASSIGNED	ILLUMINA	FOFN	TRIO	MO_ID	FA_ID
+COLO829-BL_60_60_verkko_v2.1	/net/eichler/vol28/projects/smaht/nobackups/assembly/verkko/v2.1/COLO829-BL_60_60_verkko_v2.1/assembly.haplotype1.fasta	/net/eichler/vol28/projects/smaht/nobackups/assembly/verkko/v2.1/COLO829-BL_60_60_verkko_v2.1/assembly.haplotype2.fasta	/net/eichler/vol28/projects/smaht/nobackups/assembly/verkko/v2.1/COLO829-BL_60_60_verkko_v2.1/assembly.unassigned.fasta	COLO829-BL	/net/eichler/vol28/projects/smaht/nobackups/analysis/merqury/COLO829-BL_illumina.fofn	NO	NA	NA

@@ -17,19 +17,24 @@ REF = config.get('REF')
 REF_NAME = REF.split('/')[-1].split('.fa')[0]
 ALIGNER = config.get('ALIGNER',"minimap2")
 
+raw_manifest_df = pd.read_csv(MANIFEST, sep='\t')
 
 ## Universial conversion of manifest df
-manifest_df = pd.read_csv(MANIFEST, sep='\t')
 
-if ("H1" in manifest_df.columns) and ("H2" in manifest_df):
-    df_transform = list()
-    for idx, row in manifest_df.iterrows():
-        df_transform.append({"SAMPLE": "%s_hap1"%row["SAMPLE"], "ASM":row["H1"]})
-        df_transform.append({"SAMPLE": "%s_hap2"%row["SAMPLE"], "ASM":row["H2"]})
+add_haps = {"H2":"hap2", "UNASSIGNED":"unassigned"}
+df_transform = list()
+for idx, row in raw_manifest_df.iterrows():
+    df_transform.append({"SAMPLE": f"%s_hap1"%row["SAMPLE"], "ASM":row["H1"]}) # required
 
-    manifest_df = pd.DataFrame(df_transform)
-
+    for add_hap in add_haps:
+        if (add_hap in raw_manifest_df.columns) and (not pd.isna(row[add_hap])):
+            df_transform.append({"SAMPLE": f"%s_%s"%(row["SAMPLE"], add_haps[add_hap]), "ASM": row[add_hap]})
+        
+manifest_df = pd.DataFrame(df_transform)
 manifest_df.set_index("SAMPLE",inplace=True)
+
+#-----------------------------------------
+
 
 scattergather:
     split=PARTS
@@ -39,10 +44,10 @@ wildcard_constraints:
 
 
 def find_fasta(wildcards):
-    return f"QC_results/contamination_screening/results/{wildcards.sample}/fasta/{wildcards.sample}.fasta"
+    return f"QC_results/fcs_cleaned_fasta/{wildcards.sample}/{wildcards.sample}.fasta"
 
 def find_fasta_index(wildcards):
-    return f"QC_results/contamination_screening/results/{wildcards.sample}/fasta/{wildcards.sample}.fasta.fai"
+    return f"QC_results/fcs_cleaned_fasta/{wildcards.sample}/{wildcards.sample}.fasta.fai"
 
 def find_contigs(wildcards):
     return gather.split('QC_results/saffire/tmp/{sample}.{aligner}.{scatteritem}.broken.paf', sample=wildcards.sample, aligner=ALIGNER)
@@ -263,6 +268,27 @@ rule make_minimap_paf:
         minimap2 -c -t {threads} -K {resources.mem}G --cs {params.map_opts} --secondary=no --eqx -Y {input.ref} {input.fa} > {output.paf}
         '''
 
+rule make_minimap_reverse_paf:
+    input:
+        ref = find_fasta,
+        fa = REF
+    output:
+        paf = "QC_results/saffire/results/{sample}/alignments/{sample}.minimap2.rev.paf",
+    benchmark: "QC_results/saffire/benchmarks/{sample}.minimap2_rev_paf.benchmark.txt",
+    threads: 8
+    params:
+        map_opts = MINIMAP_PARAMS,
+    singularity:
+        "docker://eichlerlab/align-basics:0.1"
+    resources: 
+        mem = 12,
+        hrs = 120
+    shell:
+        '''
+        minimap2 -c -t {threads} -K {resources.mem}G --cs {params.map_opts} --secondary=no --eqx -Y {input.ref} {input.fa} > {output.paf}
+        '''
+
+
 rule make_minimap_bam:
     input:
         fa = find_fasta,
@@ -300,6 +326,7 @@ rule make_bed:
         '''
         awk -vOFS="\t" '{{print $6,$8,$9,$1,$12}}' {input.paf} | bedtools sort -g {params.genome_index} -i - > {output.bed}
         '''
+
 
 rule split_paf:
     input:

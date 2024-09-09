@@ -14,13 +14,23 @@ ALIGNER = config.get('ALIGNER',"minimap2")
 
 
 def find_fasta(wildcards):
-    return f"QC_results/contamination_screening/results/{wildcards.sample}/fasta/{wildcards.sample}.fasta"
+    return f"QC_results/fcs_cleaned_fasta/{wildcards.sample}/{wildcards.sample}.fasta"
+
+def find_contig_fasta(wildcards):
+    return f"QC_results/fcs_cleaned_fasta/{wildcards.sample}/contig_fasta/{wildcards.sample}.fasta"
 
 def get_asm_manifest_df(manifest_df):
+
+    ## Universial conversion of manifest df
+
+    add_haps = {"H2":"hap2", "UNASSIGNED":"unassigned"}
     df_transform = list()
     for idx, row in manifest_df.iterrows():
-        df_transform.append({"SAMPLE": "%s_hap1"%row["SAMPLE"], "ASM":row["H1"]})
-        df_transform.append({"SAMPLE": "%s_hap2"%row["SAMPLE"], "ASM":row["H2"]})
+        df_transform.append({"SAMPLE": f"%s_hap1"%row["SAMPLE"], "ASM":row["H1"]}) # required
+
+        for add_hap in add_haps:
+            if (add_hap in manifest_df.columns) and (not pd.isna(row[add_hap])):
+                df_transform.append({"SAMPLE": f"%s_%s"%(row["SAMPLE"], add_haps[add_hap]), "ASM": row[add_hap]})
 
     return pd.DataFrame(df_transform)
 

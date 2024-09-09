@@ -5,7 +5,6 @@ import os
 if not os.path.exists("log"):
     os.makedirs("log")
 
-
 SNAKEMAKE_DIR = os.path.dirname(workflow.snakefile)
 
 
@@ -53,13 +52,14 @@ def agg_reads(wildcards):
         )
     )
 
-
 def find_cleaned_hap_one(wildcards):
-    return f"QC_results/contamination_screening/results/{wildcards.asm}_hap1/fasta/{wildcards.asm}_hap1.fasta"
-
+    return f"QC_results/fcs_cleaned_fasta/{wildcards.asm}_hap1/{wildcards.asm}_hap1.fasta"
 
 def find_cleaned_hap_two(wildcards):
-    return f"QC_results/contamination_screening/results/{wildcards.asm}_hap2/fasta/{wildcards.asm}_hap2.fasta"
+    return f"QC_results/fcs_cleaned_fasta/{wildcards.asm}_hap2/{wildcards.asm}_hap2.fasta"
+
+def find_unassigned_contig(wildcards):
+    return f"QC_results/fcs_cleaned_fasta/{wildcards.asm}_unassigned/{wildcards.asm}_unassigned.fasta"
 
 
 def find_meryl(wildcards):
@@ -165,7 +165,7 @@ rule meryl_combine:
     output:
         meryl=directory("QC_results/merqury/meryl/{sample}/{sample}_all.meryl"),
     resources:
-        mem=8,
+        mem=lambda wildcards, attempt: (2 ** (attempt-1)) * 8,
         hrs=48,
     threads: 1
     singularity:
@@ -188,14 +188,15 @@ rule merqury_script:
         run_script="QC_results/merqury/results/{asm}/{asm}_run.sh",
     params:
         hap_two=find_cleaned_hap_two,
+        unassigned_contig=find_unassigned_contig,
     resources:
-        mem=4,
+        mem=lambda wildcards, attempt: (2 ** (attempt-1)) * 4,
         hrs=2,
     threads: 1
     run:
         meryl_abs = os.path.abspath(input.meryl)
         hap_one_abs = os.path.abspath(input.hap_one)
-        if params.hap_two.upper() == "NA":
+        if (params.hap_two.upper() == "NA") or (not os.path.isfile(params.hap_two)):
             asm_all = [hap_one_abs]
         else:
             asm_all = [hap_one_abs, os.path.abspath(params.hap_two)]
@@ -203,6 +204,9 @@ rule merqury_script:
         with open(output.run_script, "w") as outfile:
             outfile.write("#!/usr/bin/env bash \n")
             outfile.write(f"merqury.sh {meryl_abs} {asm_all} {wildcards.asm}\n")
+            if os.path.isfile(params.unassigned_contig):
+                unassigned_abs = os.path.abspath(params.unassigned_contig)
+                outfile.write(f"merqury.sh {meryl_abs} {unassigned_abs} {wildcards.asm}_unassigned\n")
         os.chmod(output.run_script, 0o755)
 
 
@@ -212,7 +216,7 @@ rule merqury_run:
     output:
         png="QC_results/merqury/results/{asm}/{asm}.qv",
     resources:
-        mem=4,
+        mem=lambda wildcards, attempt: (2 ** (attempt-1)) * 4,
         hrs=96,
     threads: 16
     singularity:
@@ -231,7 +235,7 @@ rule hapmers:
     output:
         inherited_hist="QC_results/merqury/meryl/{sample}/hapmers/inherited_hapmers.hist",
     resources:
-        mem=4,
+        mem=lambda wildcards, attempt: (2 ** (attempt-1)) * 4,
         hrs=96,
     threads: 8
     singularity:
@@ -262,7 +266,7 @@ rule merqury_trio_script:
     params:
         meryl_hapmers=find_hapmers,
     resources:
-        mem=4,
+        mem=lambda wildcards, attempt: (2 ** (attempt-1)) * 4,
         hrs=2,
     threads: 1
     run:
@@ -283,7 +287,7 @@ rule merqury_trio_run:
     output:
         png="QC_results/merqury/results/{asm}/trio/{asm}_trio.spectra-asm.st.png",
     resources:
-        mem=4,
+        mem=lambda wildcards, attempt: (2 ** (attempt-1)) * 4,
         hrs=96,
     threads: 16
     singularity:

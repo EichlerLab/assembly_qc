@@ -1,7 +1,12 @@
 import pandas as pd
 import os
 from pathlib import Path
-
+from Bio.Seq import Seq
+from Bio.SeqRecord import SeqRecord
+from Bio import SeqIO
+from Bio.SeqIO.FastaIO import FastaWriter
+import pysam
+import numpy as np
 
 configfile: "config/config_asm_qc.yaml"
 MANIFEST = config.get('MANIFEST', 'config/manifest_asm_qc.tab')
@@ -11,19 +16,24 @@ SOURCE_DIR = "/net/eichler/vol28/7200/software/pipelines/foreign_contamination_s
 MITO_DB = config.get("mito", f"{SOURCE_DIR}/db/mito_ebv.fa")
 RDNA_DB = config.get("rdna", f"{SOURCE_DIR}/db/rdna.fa")
 
+raw_manifest_df = pd.read_csv(MANIFEST, sep='\t')
+
 ## Universial conversion of manifest df
-manifest_df = pd.read_csv(MANIFEST, sep='\t')
 
-if ("H1" in manifest_df.columns) and ("H2" in manifest_df):
-    df_transform = list()
-    for idx, row in manifest_df.iterrows():
-        df_transform.append({"SAMPLE": "%s_hap1"%row["SAMPLE"], "ASM":row["H1"]})
-        df_transform.append({"SAMPLE": "%s_hap2"%row["SAMPLE"], "ASM":row["H2"]})
+add_haps = {"H2":"hap2", "UNASSIGNED":"unassigned"}
+df_transform = list()
+for idx, row in raw_manifest_df.iterrows():
+    df_transform.append({"SAMPLE": f"%s_hap1"%row["SAMPLE"], "ASM":row["H1"]}) # required
 
-    manifest_df = pd.DataFrame(df_transform)
-
+    for add_hap in add_haps:
+        if (add_hap in raw_manifest_df.columns) and (not pd.isna(row[add_hap])):
+            df_transform.append({"SAMPLE": f"%s_%s"%(row["SAMPLE"], add_haps[add_hap]), "ASM": row[add_hap]})
+        
+manifest_df = pd.DataFrame(df_transform)
 manifest_df.set_index("SAMPLE",inplace=True)
-##-------------------------------------
+
+#-----------------------------------------
+
 
 
 def get_fasta(wildcards):
@@ -86,7 +96,7 @@ rule all_adaptor:
 rule all_gx:
     input:
         expand(
-            "QC_results/contamination_screening/results//{sample}/fcs_{sub}/.{sample}.done",
+            "QC_results/contamination_screening/results/{sample}/fcs_{sub}/.{sample}.done",
             sample=manifest_df.index,
             sub=["gx"],
         ),
@@ -94,7 +104,7 @@ rule all_gx:
 
 rule clean_fasta:
     input:
-        expand("QC_results/contamination_screening/results/{sample}/fasta/{sample}.fasta", sample=manifest_df.index),
+        expand("QC_results/cleaned_fasta/{sample}/scaftig/{sample}.fasta", sample=manifest_df.index),
 
 
 checkpoint run_fcs:
@@ -202,6 +212,7 @@ rule trim_bed:
             names=["#seq_id", "start_pos", "end_pos"],
         )
         mito_df["reason"] = "mito_ebv_rdna"
+        print (mito_df)
         out_df = pd.concat([out_df, mito_df])
         df_gx = pd.concat(
             [
@@ -288,8 +299,8 @@ rule trim_sequence:
         regions_file=rules.coerce_bed.output.regions_file,
         asm=get_fasta,
     output:
-        cleaned_fasta="QC_results/contamination_screening/temp/{sample}/fasta/{sample}.fasta",
-        cleaned_index="QC_results/contamination_screening/temp/{sample}/fasta/{sample}.fasta.fai",
+        cleaned_fasta="QC_results/contamination_screening/temp/{sample}/fasta/{sample}.gx_adapt_cleaned.fasta", ## contamination & adaptor cleaned
+        cleaned_index="QC_results/contamination_screening/temp/{sample}/fasta/{sample}.gx_adapt_cleaned.fasta.fai",
     threads: 1
     log:
         "log/trim_sequence_{sample}.log",
@@ -297,9 +308,10 @@ rule trim_sequence:
     resources:
         mem=4,
         hrs=12,
+    ### removed sed 's/:/#/g'
     shell:
         """
-        samtools faidx -r {input.regions_file} {input.asm} | sed 's/:/#/g' > {output.cleaned_fasta}
+        samtools faidx -r {input.regions_file} {input.asm} > {output.cleaned_fasta}
         samtools faidx {output.cleaned_fasta} 
         """
 
@@ -355,9 +367,9 @@ rule split_rdna:
         rdna=rules.filter_rdna.output.rdna_ctg,
         others=rules.filter_rdna.output.other_ctg,
     output:
-        cleaned_fasta="QC_results/contamination_screening/results/{sample}/fasta/{sample}.fasta",
+        cleaned_fasta="QC_results/contamination_screening/temp/{sample}/fasta/{sample}.gx_adapt_rdna_cleaned.fasta", # r-DNA-cleaned
         rdna_fasta="QC_results/contamination_screening/results/{sample}/fasta/{sample}-rdna.fasta",
-        cleaned_fai="QC_results/contamination_screening/results/{sample}/fasta/{sample}.fasta.fai",
+        cleaned_fai="QC_results/contamination_screening/temp/{sample}/fasta/{sample}.gx_adapt_rdna_cleaned.fasta.fai",
     threads: 1
     log:
         "log/filter_rdna_{sample}.log",
@@ -377,3 +389,39 @@ rule split_rdna:
         samtools faidx {output.cleaned_fasta}
         """
 
+
+rule rename_fasta:
+    input:
+        asm_fasta=get_fasta,
+        cleaned_fasta=rules.split_rdna.output.cleaned_fasta,
+    output:
+        renamed_final_fasta = "QC_results/fcs_cleaned_fasta/{sample}/{sample}.fasta",
+        renamed_final_fai = "QC_results/fcs_cleaned_fasta/{sample}/{sample}.fasta.fai"
+    threads: 1
+    log:
+        "log/rename_fasta_{sample}.log",
+    resources:
+        mem=8,
+        hrs=12,
+    run:
+        renamed_final_fasta = output.renamed_final_fasta
+
+        original_fasta = pysam.FastaFile(input.asm_fasta)
+        cleaned_fasta_records = list(SeqIO.parse(input.cleaned_fasta, "fasta"))
+        final_fasta_records = list()
+
+        for record in cleaned_fasta_records:
+            seq_name = str(record.id)
+            original_seq_name = seq_name.split(":")[0]
+            cleaned_sequence = str(record.seq)
+            raw_sequence = original_fasta.fetch(original_seq_name)
+            if cleaned_sequence == raw_sequence:
+                cleaned_seq_name = original_seq_name
+            else:
+                cleaned_seq_name = seq_name.replace(":","_trim_")
+            final_fasta_records.append(SeqRecord(Seq(cleaned_sequence), id=cleaned_seq_name, description=""))
+        with open(renamed_final_fasta, "w") as fout:
+            fasta_writer = FastaWriter(fout, wrap=None)
+            fasta_writer.write_file(final_fasta_records)
+
+        pysam.faidx(renamed_final_fasta) # indexing

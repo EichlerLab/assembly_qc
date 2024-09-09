@@ -12,23 +12,27 @@ MB_DOWNLOADS = config.get("MB_DOWNLOADS", "/net/eichler/vol28/software/modules-s
 
 SNAKEMAKE_DIR = os.path.dirname(workflow.snakefile)
 
+raw_manifest_df = pd.read_csv(MANIFEST, sep='\t')
+
 ## Universial conversion of manifest df
-manifest_df = pd.read_csv(MANIFEST, sep='\t')
 
-if ("H1" in manifest_df.columns) and ("H2" in manifest_df):
-    df_transform = list()
-    for idx, row in manifest_df.iterrows():
-        df_transform.append({"SAMPLE": "%s_hap1"%row["SAMPLE"], "ASM":row["H1"]})
-        df_transform.append({"SAMPLE": "%s_hap2"%row["SAMPLE"], "ASM":row["H2"]})
+add_haps = {"H2":"hap2", "UNASSIGNED":"unassigned"}
+df_transform = list()
+for idx, row in raw_manifest_df.iterrows():
+    df_transform.append({"SAMPLE": f"%s_hap1"%row["SAMPLE"], "ASM":row["H1"]}) # required
 
-    manifest_df = pd.DataFrame(df_transform)
-
+    for add_hap in add_haps:
+        if (add_hap in raw_manifest_df.columns) and (not pd.isna(row[add_hap])):
+            df_transform.append({"SAMPLE": f"%s_%s"%(row["SAMPLE"], add_haps[add_hap]), "ASM": row[add_hap]})
+        
+manifest_df = pd.DataFrame(df_transform)
 manifest_df.set_index("SAMPLE",inplace=True)
-##-------------------------------------
+#-----------------------------------------
+
 
 
 def get_fasta(wildcards):
-    return f"QC_results/contamination_screening/results/{wildcards.sample}/fasta/{wildcards.sample}.fasta"
+    return f"QC_results/fcs_cleaned_fasta/{wildcards.sample}/{wildcards.sample}.fasta"
 
 wildcard_constraints:
     sample="|".join(manifest_df.index),
