@@ -33,10 +33,10 @@ raw_manifest_df.set_index("SAMPLE", inplace=True)
 #-----------------------------------------
 
 def find_scaftig_fasta(wildcards):
-    return f"QC_results/fcs_cleaned_fasta/{wildcards.sample}/{wildcards.sample}.fasta"
+    return f"fcs_cleaned_fasta/{wildcards.sample}/{wildcards.sample}.fasta"
 
 def find_contig_fasta(wildcards):
-    return f"QC_results/fcs_cleaned_fasta/{wildcards.sample}/contig_fasta/{wildcards.sample}.fasta"
+    return f"fcs_cleaned_fasta/{wildcards.sample}/contig_fasta/{wildcards.sample}.fasta"
 
 def find_all_fasta_set(wildcards):
     fasta_set = [f"{wildcards.asm}_hap1"]
@@ -44,7 +44,7 @@ def find_all_fasta_set(wildcards):
         fasta_set.append(f"{wildcards.asm}_hap2")
     if not pd.isna(raw_manifest_df.at[wildcards.asm, "UNASSIGNED"]):
         fasta_set.append(f"{wildcards.asm}_unassigned")
-    all_fasta_set = [f"QC_results/fcs_cleaned_fasta/{sample}/{sample}.fasta" for sample in fasta_set] + [f"QC_results/fcs_cleaned_fasta/{sample}/contig_fasta/{sample}.fasta" for sample in fasta_set]
+    all_fasta_set = [f"fcs_cleaned_fasta/{sample}/{sample}.fasta" for sample in fasta_set] + [f"fcs_cleaned_fasta/{sample}/contig_fasta/{sample}.fasta" for sample in fasta_set]
     return all_fasta_set
 
 
@@ -52,7 +52,7 @@ rule split_scaftigs:
     input:
         scaftig_fasta=find_scaftig_fasta,
     output:
-        contig_fasta = "QC_results/fcs_cleaned_fasta/{sample}/contig_fasta/{sample}.fasta"
+        contig_fasta = "fcs_cleaned_fasta/{sample}/contig_fasta/{sample}.fasta"
     threads: 1,
     resources:
         mem=lambda wildcards, attempt: attempt * 8,
@@ -99,16 +99,19 @@ rule split_scaftigs:
             fasta_writer.write_file(contig_fasta_records)
         pysam.faidx(contig_fasta)
 
+rule get_telo_info:
+    input:
+
 rule calculate_stats:
     input:
         fasta_set = find_all_fasta_set,
     output:
-        tsv = "QC_results/assembly_stats/{asm}/{asm}.tsv",
+        tsv = "assembly_stats/{asm}/{asm}.tsv",
     threads: 1,
     resources:
         mem=lambda wildcards, attempt: attempt * 16,
         hrs=4,
     benchmark:
-        "QC_results/assembly_stats/benchmark/{asm}.benchmark.txt"
+        "assembly_stats/benchmark/{asm}.benchmark.txt"
     script:
         f"{SNAKEMAKE_ROOT_DIR}/scripts/assembly_stats.py"

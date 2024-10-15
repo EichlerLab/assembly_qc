@@ -40,19 +40,15 @@ def get_fasta(wildcards):
     return manifest_df.at[wildcards.sample, "ASM"]
 
 
-def get_fai(wildcards):
-    return manifest_df.at[wildcards.sample, "ASM"] + ".fai"
-
-
 def find_gx_report(wildcards):
     (IDS,) = glob_wildcards(
-        "QC_results/contamination_screening/results/{sample}/fcs_gx/{gx_name}.fcs_gx_report.txt".format(
+        "contamination_screening/results/{sample}/fcs_gx/{gx_name}.fcs_gx_report.txt".format(
             sample=wildcards.sample, gx_name="{gx_name}"
         )
     )
 
     return expand(
-        "QC_results/contamination_screening/results/{sample}/fcs_gx/{gx_name}.fcs_gx_report.txt",
+        "contamination_screening/results/{sample}/fcs_gx/{gx_name}.fcs_gx_report.txt",
         sample=wildcards.sample,
         gx_name=IDS,
     )
@@ -80,7 +76,7 @@ localrules:
 rule all:
     input:
         expand(
-            "QC_results/contamination_screening/results/{sample}/trim.bed",
+            "contamination_screening/results/{sample}/trim.bed",
             sample=manifest_df.index,
         ),
 
@@ -88,7 +84,7 @@ rule all:
 rule all_adaptor:
     input:
         expand(
-            "QC_results/contamination_screening/results/{sample}/fcs_adaptor/fcs_adaptor_report.txt",
+            "contamination_screening/results/{sample}/fcs_adaptor/fcs_adaptor_report.txt",
             sample=manifest_df.index,
         ),
 
@@ -96,7 +92,7 @@ rule all_adaptor:
 rule all_gx:
     input:
         expand(
-            "QC_results/contamination_screening/results/{sample}/fcs_{sub}/.{sample}.done",
+            "contamination_screening/results/{sample}/fcs_{sub}/.{sample}.done",
             sample=manifest_df.index,
             sub=["gx"],
         ),
@@ -104,19 +100,19 @@ rule all_gx:
 
 rule clean_fasta:
     input:
-        expand("QC_results/cleaned_fasta/{sample}/scaftig/{sample}.fasta", sample=manifest_df.index),
+        expand("cleaned_fasta/{sample}/scaftig/{sample}.fasta", sample=manifest_df.index),
 
 
 checkpoint run_fcs:
     input:
         asm_fasta=get_fasta,
     output:
-        flag=touch("QC_results/contamination_screening/results/{sample}/fcs_gx/.{sample}.done"),
+        flag=touch("contamination_screening/results/{sample}/fcs_gx/.{sample}.done"),
     threads: 1
     resources:
         mem=16,
         hrs=12,
-    benchmark: "QC_results/contamination_screening/benchmarks/fcs_gx/{sample}.tsv"
+    benchmark: "contamination_screening/benchmarks/fcs_gx/{sample}.tsv"
     params:
         taxid=TAXID,
         GXDB_LOC="/data/scratch/GXDB/gxdb/",
@@ -127,15 +123,70 @@ checkpoint run_fcs:
         python3 {params.fcs_script} --image {params.fcs_img} screen genome --fasta {input.asm_fasta} --out-dir $( dirname {output.flag} ) --gx-db {params.GXDB_LOC}  --tax-id {params.taxid}
         """
 
+rule index_asm_fasta:
+    input:
+        asm_fasta=get_fasta
+    output:
+        link_fasta="contamination_screening/raw_fasta/{sample}.fasta",
+        fai="contamination_screening/raw_fasta/{sample}.fasta.fai"
+    threads: 1
+    resources:
+        mem=8,
+        hrs=4,
+    shell:
+        """
+        ln -s {input.asm_fasta} {output.link_fasta}
+        samtools faidx {output.link_fasta}
+        """
+
+
+rule remove_short_contigs:
+    input:
+        fasta="contamination_screening/raw_fasta/{sample}.fasta"
+    output:
+        filtered_fasta = "contamination_screening/filtered_fasta/{sample}.filtered.fasta",
+        filtered_fai = "contamination_screening/filtered_fasta/{sample}.filtered.fasta.fai"
+    log:
+        "log/contamination_screening/remove_short_contigs_{sample}.log",
+    threads: 1
+    resources:
+        mem=8,
+        hrs=2,
+    run:
+        filtered_fasta = output.filtered_fasta
+        below_ten_fasta = filtered_fasta.replace(".filtered.fasta",".below_10bp.fasta")
+
+        raw_fasta_records = list(SeqIO.parse(input.fasta, "fasta"))
+        filtered_fasta_records = list()
+        below_ten_fasta_records = list()
+
+        for raw_fasta_record in raw_fasta_records:
+            contig_name = str(raw_fasta_record.id)
+            contig_seq = str(raw_fasta_record.seq)
+            if len(contig_seq) < 10:
+                below_ten_fasta_records.append(SeqRecord(Seq(contig_seq), id=contig_name, description=""))
+            else:
+                filtered_fasta_records.append(SeqRecord(Seq(contig_seq), id=contig_name, description=""))
+
+        with open(filtered_fasta, "w") as fout_f:
+            fasta_writer = FastaWriter(fout_f, wrap=None)
+            fasta_writer.write_file(filtered_fasta_records)
+        pysam.faidx(filtered_fasta) # indexing
+        if len(below_ten_fasta_records) > 0:
+            with open(below_ten_fasta, "w") as fout_b:
+                fasta_writer = FastaWriter(fout_b, wrap=None)
+                fasta_writer.write_file(below_ten_fasta_records)
+            pysam.faidx(below_ten_fasta) # indexing
+
 
 rule run_fcs_adapter:
     input:
-        asm_fasta=get_fasta,
+        asm_fasta="contamination_screening/filtered_fasta/{sample}.filtered.fasta",
     output:
-        report_txt="QC_results/contamination_screening/results/{sample}/fcs_adaptor/fcs_adaptor_report.txt",
+        report_txt="contamination_screening/results/{sample}/fcs_adaptor/fcs_adaptor_report.txt",
     threads: 1
     log:
-        "log/run_fcs_adaptor_{sample}.log",
+        "log/contamination_screening/run_fcs_adaptor_{sample}.log",
     singularity:
         f"{SOURCE_DIR}/images/fcs-adaptor.sif"
     resources:
@@ -153,13 +204,13 @@ rule run_fcs_adapter:
 
 rule blast_mito:
     input:
-        asm_fasta=get_fasta,
+        asm_fasta="contamination_screening/filtered_fasta/{sample}.filtered.fasta",
         mito_db=MITO_DB,
     output:
-        blast_out="QC_results/contamination_screening/results/{sample}/fcs_mito/fcs_mito.txt",
+        blast_out="contamination_screening/results/{sample}/fcs_mito/fcs_mito.txt",
     threads: 1
     log:
-        "log/blast_mito_{sample}.log",
+        "log/contamination_screening/blast_mito_{sample}.log",
     resources:
         mem=4,
         hrs=12,
@@ -173,12 +224,12 @@ rule blast_mito:
 rule filter_mito:
     input:
         blast_out=rules.blast_mito.output.blast_out,
-        fai=get_fai,
+        fai="contamination_screening/filtered_fasta/{sample}.filtered.fasta.fai",
     output:
-        mito_bed="QC_results/contamination_screening/results/{sample}/fcs_mito/mito.bed",
+        mito_bed="contamination_screening/results/{sample}/fcs_mito/mito.bed",
     threads: 1
     log:
-        "log/filter_mito_{sample}.log",
+        "log/contamination_screening/filter_mito_{sample}.log",
     resources:
         mem=4,
         hrs=12,
@@ -196,10 +247,10 @@ rule trim_bed:
         adapt_report=rules.run_fcs_adapter.output.report_txt,
         mito_bed=rules.filter_mito.output.mito_bed,
     output:
-        trim_file="QC_results/contamination_screening/results/{sample}/trim.bed",
+        trim_file="contamination_screening/results/{sample}/trim.bed",
     threads: 1
     log:
-        "log/run_fcs_trim_{sample}.log",
+        "log/contamination_screening/run_fcs_trim_{sample}.log",
     resources:
         mem=16,
         hrs=12,
@@ -278,12 +329,12 @@ rule trim_bed:
 rule coerce_bed:
     input:
         trim_file=rules.trim_bed.output.trim_file,
-        fai=get_fai,
+        fai="contamination_screening/filtered_fasta/{sample}.filtered.fasta.fai",
     output:
-        regions_file="QC_results/contamination_screening/temp/{sample}/regions.out",
+        regions_file="contamination_screening/temp/{sample}/regions.out",
     threads: 1
     log:
-        "log/coerce_bed_{sample}.log",
+        "log/contamination_screening/coerce_bed_{sample}.log",
     resources:
         mem=4,
         hrs=12,
@@ -297,13 +348,13 @@ rule coerce_bed:
 rule trim_sequence:
     input:
         regions_file=rules.coerce_bed.output.regions_file,
-        asm=get_fasta,
+        asm="contamination_screening/filtered_fasta/{sample}.filtered.fasta",
     output:
-        cleaned_fasta="QC_results/contamination_screening/temp/{sample}/fasta/{sample}.gx_adapt_cleaned.fasta", ## contamination & adaptor cleaned
-        cleaned_index="QC_results/contamination_screening/temp/{sample}/fasta/{sample}.gx_adapt_cleaned.fasta.fai",
+        cleaned_fasta="contamination_screening/temp/{sample}/fasta/{sample}.gx_adapt_cleaned.fasta", ## contamination & adaptor cleaned
+        cleaned_index="contamination_screening/temp/{sample}/fasta/{sample}.gx_adapt_cleaned.fasta.fai",
     threads: 1
     log:
-        "log/trim_sequence_{sample}.log",
+        "log/contamination_screening/trim_sequence_{sample}.log",
     singularity: "docker://eichlerlab/binf-basics:0.1"
     resources:
         mem=4,
@@ -321,10 +372,10 @@ rule blast_rdna:
         asm_fasta=rules.trim_sequence.output.cleaned_fasta,
         rdna_db=RDNA_DB,
     output:
-        blast_out="QC_results/contamination_screening/results/{sample}/rdna/rdna.txt",
+        blast_out="contamination_screening/results/{sample}/rdna/rdna.txt",
     threads: 1
     log:
-        "log/blast_rdna_{sample}.log",
+        "log/contamination_screening/blast_rdna_{sample}.log",
     resources:
         mem=4,
         hrs=12,
@@ -340,11 +391,11 @@ rule filter_rdna:
         blast_out=rules.blast_rdna.output.blast_out,
         fai=rules.trim_sequence.output.cleaned_index,
     output:
-        rdna_ctg="QC_results/contamination_screening/results/{sample}/rdna/rdna.bed",
-        other_ctg="QC_results/contamination_screening/results/{sample}/clean/clean.bed",
+        rdna_ctg="contamination_screening/results/{sample}/rdna/rdna.bed",
+        other_ctg="contamination_screening/results/{sample}/clean/clean.bed",
     threads: 1
     log:
-        "log/filter_mito_{sample}.log",
+        "log/contamination_screening/filter_mito_{sample}.log",
     resources:
         mem=4,
         hrs=12,
@@ -367,12 +418,12 @@ rule split_rdna:
         rdna=rules.filter_rdna.output.rdna_ctg,
         others=rules.filter_rdna.output.other_ctg,
     output:
-        cleaned_fasta="QC_results/contamination_screening/temp/{sample}/fasta/{sample}.gx_adapt_rdna_cleaned.fasta", # r-DNA-cleaned
-        rdna_fasta="QC_results/contamination_screening/results/{sample}/fasta/{sample}-rdna.fasta",
-        cleaned_fai="QC_results/contamination_screening/temp/{sample}/fasta/{sample}.gx_adapt_rdna_cleaned.fasta.fai",
+        cleaned_fasta="contamination_screening/temp/{sample}/fasta/{sample}.gx_adapt_rdna_cleaned.fasta", # r-DNA-cleaned
+        rdna_fasta="contamination_screening/results/{sample}/fasta/{sample}-rdna.fasta",
+        cleaned_fai="contamination_screening/temp/{sample}/fasta/{sample}.gx_adapt_rdna_cleaned.fasta.fai",
     threads: 1
     log:
-        "log/filter_rdna_{sample}.log",
+        "log/contamination_screening/filter_rdna_{sample}.log",
     resources:
         mem=4,
         hrs=12,
@@ -392,14 +443,14 @@ rule split_rdna:
 
 rule rename_fasta:
     input:
-        asm_fasta=get_fasta,
+        asm_fasta="contamination_screening/filtered_fasta/{sample}.filtered.fasta",
         cleaned_fasta=rules.split_rdna.output.cleaned_fasta,
     output:
-        renamed_final_fasta = "QC_results/fcs_cleaned_fasta/{sample}/{sample}.fasta",
-        renamed_final_fai = "QC_results/fcs_cleaned_fasta/{sample}/{sample}.fasta.fai"
+        renamed_final_fasta = "fcs_cleaned_fasta/{sample}/{sample}.fasta",
+        renamed_final_fai = "fcs_cleaned_fasta/{sample}/{sample}.fasta.fai"
     threads: 1
     log:
-        "log/rename_fasta_{sample}.log",
+        "log/contamination_screening/rename_fasta_{sample}.log",
     resources:
         mem=8,
         hrs=12,

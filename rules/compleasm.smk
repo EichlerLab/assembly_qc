@@ -32,7 +32,7 @@ manifest_df.set_index("SAMPLE",inplace=True)
 
 
 def get_fasta(wildcards):
-    return f"QC_results/fcs_cleaned_fasta/{wildcards.sample}/{wildcards.sample}.fasta"
+    return f"fcs_cleaned_fasta/{wildcards.sample}/{wildcards.sample}.fasta"
 
 wildcard_constraints:
     sample="|".join(manifest_df.index),
@@ -41,13 +41,13 @@ localrules: compleasm_run, all,
 
 rule all:
     input:
-        expand("QC_results/compleasm/results/{sample}/summary.txt", sample=manifest_df.index.values),
+        expand("compleasm/results/{sample}/summary.txt", sample=manifest_df.index.values),
 
 rule compleasm_run:
     input:
         asm_fasta=get_fasta,
     output:
-        summary = "QC_results/compleasm/results/{sample}/summary.txt",
+        summary = "compleasm/results/{sample}/summary.txt",
     threads: 16
     resources:
         mem=16,
@@ -60,6 +60,6 @@ rule compleasm_run:
         "docker://eichlerlab/compleasm:0.2.6"
     shell:
         """
-        compleasm.py run -a {input.asm_fasta} -o QC_results/compleasm/results/{wildcards.sample} -t {threads} -l {params.lineage} -m {params.mode} -L {params.mb_downloads}
+        compleasm.py run -a {input.asm_fasta} -o compleasm/results/{wildcards.sample} -t {threads} -l {params.lineage} -m {params.mode} -L {params.mb_downloads}
         """
 

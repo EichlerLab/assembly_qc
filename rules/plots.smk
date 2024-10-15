@@ -14,10 +14,10 @@ ALIGNER = config.get('ALIGNER',"minimap2")
 
 
 def find_fasta(wildcards):
-    return f"QC_results/fcs_cleaned_fasta/{wildcards.sample}/{wildcards.sample}.fasta"
+    return f"fcs_cleaned_fasta/{wildcards.sample}/{wildcards.sample}.fasta"
 
 def find_contig_fasta(wildcards):
-    return f"QC_results/fcs_cleaned_fasta/{wildcards.sample}/contig_fasta/{wildcards.sample}.fasta"
+    return f"fcs_cleaned_fasta/{wildcards.sample}/contig_fasta/{wildcards.sample}.fasta"
 
 def get_asm_manifest_df(manifest_df):
 
@@ -43,21 +43,21 @@ conv_manifest_df.set_index("SAMPLE",inplace=True) ## shortened df using only SAM
 
 rule gather_plots:
     input:
-        expand("QC_results/contig_stats/n50/{sample}.n50.stats", sample = conv_manifest_df.index),
-        expand("QC_results/contig_stats/plots/{sample}.dist.log.png", sample = conv_manifest_df.index),
-        expand("QC_results/contig_stats/plots/{sample}.scatter.log.png", sample = conv_manifest_df.index),
-        expand("QC_results/ideo_plots/{aligner}/{asm}.ideoplot.pdf", asm = full_manifest_df.index, aligner = ALIGNER),
-        expand("QC_results/ploidy_plots/{aligner}/{asm}.summary.txt", asm = full_manifest_df.index, aligner = ALIGNER),
+        expand("contig_stats/n50/{sample}.n50.stats", sample = conv_manifest_df.index),
+        expand("contig_stats/plots/{sample}.dist.log.png", sample = conv_manifest_df.index),
+        expand("contig_stats/plots/{sample}.scatter.log.png", sample = conv_manifest_df.index),
+        expand("ideo_plots/{aligner}/{asm}.ideoplot.pdf", asm = full_manifest_df.index, aligner = ALIGNER),
+        expand("ploidy_plots/{aligner}/{asm}.summary.txt", asm = full_manifest_df.index, aligner = ALIGNER),
 
 
 rule make_contig_stats:
     input:
         asm_fasta = find_fasta,
     output:
-        n50_stats = "QC_results/contig_stats/n50/{sample}.n50.stats",
-        dist_plot = "QC_results/contig_stats/plots/{sample}.dist.log.png",
-        scatter_plot = "QC_results/contig_stats/plots/{sample}.scatter.log.png",
-        flag = "QC_results/contig_stats/{sample}.contig_stats.done"
+        n50_stats = "contig_stats/n50/{sample}.n50.stats",
+        dist_plot = "contig_stats/plots/{sample}.dist.log.png",
+        scatter_plot = "contig_stats/plots/{sample}.scatter.log.png",
+        flag = "contig_stats/{sample}.contig_stats.done"
     threads:
         1
     resources:
@@ -73,10 +73,10 @@ rule make_contig_stats:
 
 rule make_ideo_plot:
     input:
-        hap_one_bed = "QC_results/saffire/results/{asm}_hap1/beds/{asm}_hap1.{aligner}.bed",
-        hap_two_bed = "QC_results/saffire/results/{asm}_hap2/beds/{asm}_hap2.{aligner}.bed",
+        hap_one_bed = "saffire/results/{asm}_hap1/beds/{asm}_hap1.{aligner}.bed",
+        hap_two_bed = "saffire/results/{asm}_hap2/beds/{asm}_hap2.{aligner}.bed",
     output:
-        pdf = "QC_results/ideo_plots/{aligner}/{asm}.ideoplot.pdf",
+        pdf = "ideo_plots/{aligner}/{asm}.ideoplot.pdf",
     threads:
         1
     resources:
@@ -91,12 +91,12 @@ rule make_ideo_plot:
 
 rule make_ploidy_plot:
     input:
-        hap_one_paf = "QC_results/saffire/results/{asm}_hap1/alignments/{asm}_hap1.{aligner}.paf",
-        hap_two_paf = "QC_results/saffire/results/{asm}_hap2/alignments/{asm}_hap2.{aligner}.paf",
+        hap_one_paf = "saffire/results/{asm}_hap1/alignments/{asm}_hap1.{aligner}.paf",
+        hap_two_paf = "saffire/results/{asm}_hap2/alignments/{asm}_hap2.{aligner}.paf",
 
     output:
-        pdf = "QC_results/ploidy_plots/{aligner}/{asm}.ploidy.pdf",
-        summary = "QC_results/ploidy_plots/{aligner}/{asm}.summary.txt",
+        pdf = "ploidy_plots/{aligner}/{asm}.ploidy.pdf",
+        summary = "ploidy_plots/{aligner}/{asm}.summary.txt",
     threads:
         1
     resources:
