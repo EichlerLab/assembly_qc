@@ -88,12 +88,8 @@ localrules:
     fcs_clean_fasta,
     cpl_compleasm_run,
 
-rule test:
+rule all:
     input:
-        expand(
-            "fcs_cleaned_fasta/{sample}/{sample}.fasta",
-            sample=conv_manifest_df.index.values,
-        ),
         expand(
             rules.cst_calculate_stats.output.tsv,
             asm=full_manifest_df.index.values,
@@ -124,45 +120,40 @@ rule test:
             rules.cpl_compleasm_run.output.summary,
             sample=conv_manifest_df.index.values,
         ),
+
     default_target: True
+
+rule get_saf:
+        expand(
+            "saffire/{ref}/results/{sample}/saff/{sample}.{aligner}.saf",
+            ref=REF_DICT,
+            sample=conv_manifest_df.index.values,
+            aligner=ALIGNER,
+        )
+
+rule get_compleasm:
+        expand(
+            rules.cpl_compleasm_run.output.summary,
+            sample=conv_manifest_df.index.values,
+        ),
+
+rule get_cleaned_fasta:
+        expand(
+            "fcs_cleaned_fasta/{sample}/{sample}.fasta",
+            sample=conv_manifest_df.index.values,
+        ),    
+
+rule get_qv:
+        expand(            
+            "merqury/results/{asm}/{asm}.qv",
+            asm=full_manifest_df.index.values,
+        ),
+
+
 
 # rule all:
 #     # fcs as default
 #     input:
-#         # Saffirels 
-#         expand(
-#             "saffire/{ref}/results/{sample}/alignments/{sample}.{aligner}.bam",
-#             ref=REF_NAME,                        
-#             sample=conv_manifest_df.index.values,
-#             aligner=ALIGNER,
-#         ),
-#         expand(
-#             rules.saf_make_bed.output.bed,
-#             ref=REF_NAME,            
-#             sample=conv_manifest_df.index.values,
-#             aligner=ALIGNER,
-#         ),
-#         # Merqury
-#         expand(            
-#             "merqury/results/{asm}/{asm}.qv",
-#             asm=full_manifest_df.index.values,
-#         ),
-#         # Compleasm
-#         expand(
-#             rules.cpl_compleasm_run.output.summary,
-#             sample=conv_manifest_df.index.values,
-#         ),
-#         # Contig stats
-#         expand(
-#             rules.plt_make_contig_stats.output.flag,
-#             sample=conv_manifest_df.index,
-#         ),
-#         # ideo plot for assembly
-#         expand(
-#             rules.plt_make_ideo_plot.output.pdf,
-#             asm=full_manifest_df.index,
-#             aligner = ALIGNER,
-#         ),
 #         # ploidy plot for assembly
 #         expand(
 #             rules.plt_make_ploidy_plot.output.summary,
@@ -170,5 +161,5 @@ rule test:
 #             aligner = ALIGNER,
 #         ),
 
-# #    default_target: True
+
 

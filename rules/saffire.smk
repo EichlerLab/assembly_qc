@@ -53,7 +53,7 @@ def find_fasta_index(wildcards):
     return f"fcs_cleaned_fasta/{wildcards.sample}/{wildcards.sample}.fasta.fai"
 
 def find_contigs(wildcards):
-    return gather.split('saffire/tmp/{sample}.{aligner}.{scatteritem}.broken.paf', sample=wildcards.sample, aligner=wildcards.aligner)
+    return gather.split('saffire/{ref}/tmp/{sample}.{aligner}.{scatteritem}.broken.paf', ref=wildcards.ref, sample=wildcards.sample, aligner=wildcards.aligner)
         
 
 checkpoint copy_ref_fasta:
@@ -310,85 +310,87 @@ rule make_bed:
         awk -vOFS="\t" '{{print $6,$8,$9,$1,$12}}' {input.paf} | bedtools sort -g {input.genome_index} > {output.bed}
         '''
 
-# rule split_paf:
-#     input:
-#         paf = "saffire/{ref}/results/{sample}/alignments/{sample}.{aligner}.paf",
-#     output:
-#         flag = temp(scatter.split("saffire/{ref}/tmp/{{sample}}.{{aligner}}.{scatteritem}.paf")),
-#         temp_paf = temp('saffire/{ref}/tmp/{sample}_uniform.{aligner}.paf')
-#     threads: 1
-#     resources:
-#         mem = 8,
-#         hrs = 24
-#     run:
-#         with open(input.paf, 'r') as infile:
-#             for i, line in enumerate(infile):
-#                 if i == 0:
-#                     all_tags = set([x.split(':')[0] for x in line.split('\t')[12:]])
-#                 else:
-#                     all_tags = all_tags.intersection(set([x.split(':')[0] for x in line.split('\t')[12:]]))
+rule split_paf:
+    input:
+        paf = "saffire/{ref}/results/{sample}/alignments/{sample}.{aligner}.paf",
+    output:
+        flag = temp(scatter.split("saffire/{{ref}}/tmp/{{sample}}.{{aligner}}.{scatteritem}.paf")),
+        temp_paf = temp("saffire/{ref}/tmp/{sample}_uniform.{aligner}.paf")
+    threads: 1
+    resources:
+        mem = 8,
+        hrs = 24
+    run:
+        with open(input.paf, 'r') as infile:
+            for i, line in enumerate(infile):
+                if i == 0:
+                    all_tags = set([x.split(':')[0] for x in line.split('\t')[12:]])
+                else:
+                    all_tags = all_tags.intersection(set([x.split(':')[0] for x in line.split('\t')[12:]]))
 
-#         out_list = []
+        out_list = []
 
-#         with open(input.paf, 'r') as infile:
-#             for line in infile:
-#                 out_list.append(line.split('\t')[0:12]+[x for x in line.split('\t')[12:] if x.split(':')[0] in all_tags])
+        with open(input.paf, 'r') as infile:
+            for line in infile:
+                out_list.append(line.split('\t')[0:12]+[x for x in line.split('\t')[12:] if x.split(':')[0] in all_tags])
 
-#         with open(output.temp_paf, 'w') as outfile:
-#             for item in out_list:
-#                 outfile.write('\t'.join(item))
+        with open(output.temp_paf, 'w') as outfile:
+            for item in out_list:
+                outfile.write('\t'.join(item))
 
-#         df = pd.read_csv(output.temp_paf, sep='\t', low_memory=False, header=None)
-#         col_out = df.columns.values
-#         for i, contig in enumerate(df[0].unique()):
-#             out_num = (i % PARTS) + 1
-#             df.loc[df[0] == contig][col_out].to_csv(f'saffire/tmp/{wildcards.sample}.{ALIGNER}.{out_num}-of-{PARTS}.paf', sep='\t', index=False, header=False, mode='a+')
+        df = pd.read_csv(output.temp_paf, sep='\t', low_memory=False, header=None)
+        col_out = df.columns.values
+        for i, contig in enumerate(df[0].unique()):
+            out_num = (i % PARTS) + 1
+            df.loc[df[0] == contig][col_out].to_csv(f'saffire/tmp/{wildcards.sample}.{ALIGNER}.{out_num}-of-{PARTS}.paf', sep='\t', index=False, header=False, mode='a+')
 
-# rule trim_break_orient_paf:
-#     input:
-#         paf = 'saffire/{ref}/tmp/{sample}.{aligner}.{scatteritem}.paf'
-#     output:
-#         contig = temp('saffire/{ref}/tmp/{sample}.{aligner}.{scatteritem}.orient.paf'),
-#         broken = temp('saffire/{ref}/tmp/{sample}.{aligner}.{scatteritem}.broken.paf')
-#     threads: 1
-#     singularity:
-#         "docker://eichlerlab/rustybam:0.1.33"
-#     resources:
-#         mem = 24,
-#         hrs = 24
-#     shell:
-#         '''
-#         rustybam orient {input.paf} | rustybam trim-paf | rb filter --paired-len 1000000 > {output.contig}
-#         rustybam break-paf --max-size {SV_SIZE} {output.contig} > {output.broken}
-#         '''
+rule trim_break_orient_paf:
+    input:
+        paf = 'saffire/{ref}/tmp/{sample}.{aligner}.{scatteritem}.paf'
+    output:
+        contig = temp('saffire/{ref}/tmp/{sample}.{aligner}.{scatteritem}.orient.paf'),
+        broken = temp('saffire/{ref}/tmp/{sample}.{aligner}.{scatteritem}.broken.paf')
+    threads: 1
+    params:
+        sv_size = SV_SIZE,
+    singularity:
+        "docker://eichlerlab/rustybam:0.1.33"
+    resources:
+        mem = 24,
+        hrs = 24
+    shell:
+        '''
+        rustybam orient {input.paf} | rustybam trim-paf | rb filter --paired-len 1000000 > {output.contig}
+        rustybam break-paf --max-size {params.sv_size} {output.contig} > {output.broken}
+        '''
 
-# rule combine_paf:
-#     input:
-#         paf = find_contigs,
-#         flag = rules.split_paf.output.flag
-#     output:
-#         paf = 'saffire/{ref}/tmp/{sample}.{aligner}.broken.paf'
-#     threads: 1
-#     resources:
-#         mem = 8,
-#         hrs = 24
-#     shell:
-#         '''
-#         cat {input.paf} > {output.paf}
-#         '''
+rule combine_paf:
+    input:
+        paf = find_contigs,
+        flag = rules.split_paf.output.flag
+    output:
+        paf = 'saffire/{ref}/tmp/{sample}.{aligner}.broken.paf'
+    threads: 1
+    resources:
+        mem = 8,
+        hrs = 24
+    shell:
+        '''
+        cat {input.paf} > {output.paf}
+        '''
 
-# rule saff_out:
-#     input:
-#         paf = rules.combine_paf.output.paf
-#     output:
-#         saf = 'saffire/{ref}/results/{sample}/{sample}.{aligner}.saf'
-#     threads: 1
-#     singularity:
-#         "docker://eichlerlab/rustybam:0.1.33"
-#     resources:
-#         mem = 8,
-#         hrs = 24
-#     shell:
-#         '''
-#         rb stats --paf {input.paf} > {output.saf}
-#         '''
+rule saff_out:
+    input:
+        paf = rules.combine_paf.output.paf
+    output:
+        saf = 'saffire/{ref}/results/{sample}/saff/{sample}.{aligner}.saf'
+    threads: 1
+    singularity:
+        "docker://eichlerlab/rustybam:0.1.33"
+    resources:
+        mem = 8,
+        hrs = 24
+    shell:
+        '''
+        rb stats --paf {input.paf} > {output.saf}
+        '''
