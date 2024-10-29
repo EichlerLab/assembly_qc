@@ -113,8 +113,7 @@ rule test:
             ref=REF_DICT,
             sample=conv_manifest_df.index.values,
             aligner=ALIGNER,
-        ),                
-
+        ),
         expand(
             "saffire/{ref}/results/{sample}/beds/{sample}.{aligner}.bed",
             ref=REF_DICT,

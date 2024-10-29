@@ -7,9 +7,8 @@ configfile: 'config/config_asm_qc.yaml'
 MANIFEST = config.get('MANIFEST', 'config/manifest_asm_qc.tab')
 
 SNAKEMAKE_DIR = os.path.dirname(workflow.snakefile)
-IDEO_PLOT_SCRIPT = "/net/eichler/vol28/7200/software/pipelines/compteam_tools/ideo_plot.py"
+
 N50_SCRIPT = "/net/eichler/vol28/7200/software/pipelines/compteam_tools/n50"
-PLOIDY_PLOT_SCRIPT = f"{SNAKEMAKE_DIR}/../scripts/ploidy.R"
 ALIGNER = config.get('ALIGNER',"minimap2")
 
 
@@ -18,6 +17,15 @@ def find_fasta(wildcards):
 
 def find_contig_fasta(wildcards):
     return f"fcs_cleaned_fasta/{wildcards.sample}/contig_fasta/{wildcards.sample}.fasta"
+
+
+def find_all_bed_set(wildcards):
+    haplotype_set = [f"{wildcards.asm}_hap1"]
+    if not pd.isna(full_manifest_df.at[wildcards.asm, "H2"]):
+        haplotype_set.append(f"{wildcards.asm}_hap2")        
+    all_bed_set = [f"saffire/{wildcards.ref}/results/{sample}/beds/{sample}.{wildcards.aligner}.bed" for sample in haplotype_set]
+    return all_bed_set
+
 
 def get_asm_manifest_df(manifest_df):
 
@@ -73,21 +81,23 @@ rule make_contig_stats:
 
 rule make_ideo_plot:
     input:
-        hap_one_bed = "saffire/results/{asm}_hap1/beds/{asm}_hap1.{aligner}.bed",
-        hap_two_bed = "saffire/results/{asm}_hap2/beds/{asm}_hap2.{aligner}.bed",
+        hap_beds = find_all_bed_set
     output:
-        pdf = "ideo_plots/{aligner}/{asm}.ideoplot.pdf",
+        pdf = "ideo_plots/{aligner}/{asm}_to_{ref}.ideoplot.pdf",
     threads:
         1
     resources:
         mem = 8,
         hrs = 1,
     params:
-        script_path = IDEO_PLOT_SCRIPT,
-    shell:
-        '''
-        {params.script_path} --asm1 {input.hap_one_bed} --asm2 {input.hap_two_bed} -r chm13 -s {wildcards.asm} -o {output.pdf}
-        '''
+        ref = "{ref}",
+        path = lambda wildcards: config["REF"][wildcards.ref]["PATH"],
+        cyto = lambda wildcards: config["REF"][wildcards.ref].get("CYTO","Null"),
+        chroms = lambda wildcards: config["REF"][wildcards.ref]["CHROMS"],
+    singularity:
+        "docker://eichlerlab/ideoplot:0.1",
+    script:
+        f"{SNAKEMAKE_DIR}/../scripts/ideo_plot.py"
 
 rule make_ploidy_plot:
     input:
@@ -103,11 +113,10 @@ rule make_ploidy_plot:
         mem = 8,
         hrs = 4,
     params:
-        script_path = PLOIDY_PLOT_SCRIPT,
-        snakemake_dir = f"{SNAKEMAKE_DIR}/../scripts",
+        script_dir = f"{SNAKEMAKE_DIR}/../scripts",
     singularity:
         "docker://eichlerlab/binf-rplot:0.1"
     shell:
         '''
-        Rscript {params.script_path} {params.snakemake_dir} {wildcards.asm} {input.hap_one_paf} {input.hap_two_paf} {output.pdf} {output.summary}
+        Rscript {params.script_dir}/ploidy.R {params.script_dir} {wildcards.asm} {input.hap_one_paf} {input.hap_two_paf} {output.pdf} {output.summary}
         '''

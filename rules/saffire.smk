@@ -173,48 +173,48 @@ rule make_winnowmap_scatter_paf:
         ),
     benchmark: "saffire/{ref}/benchmarks/{sample}.winnowmap2_paf.{scatteritem}.benchmark.txt",
     resources:
-        mem=lambda wildcards, attempt: max(attempt * 2, 16),
+        mem=lambda wildcards, attempt: min(16 + (attempt-1) * 48, 120),
         hrs=168,
         disk_free=5,
     params:
         map_opts = MINIMAP_PARAMS,
     singularity:
         "docker://eichlerlab/align-basics:0.1"
-    threads: 12,
+    threads: 4,
     shell:
         """
         winnowmap -W {input.kmer_count} -c -t {threads} -K {resources.mem}G --cs {params.map_opts} --secondary=no --eqx -Y {input.ref} {input.fa} > {output.scatter_paf}
         """
 
 
-rule make_winnowmap_scatter_sam:
+rule make_winnowmap_scatter_bam:
     input:
         ref = "saffire/{ref}/reference/{ref}.fa",
         kmer_count = rules.get_kmer_count.output.kmer_count,
         fa = "saffire/tmp/{sample}.{scatteritem}.fasta"
     output:
-        scatter_sam=temp(
-            "saffire/{ref}/tmp/{sample}.winnowmap2.{scatteritem}.sam"
+        scatter_bam=temp(
+            "saffire/{ref}/tmp/{sample}.winnowmap2.{scatteritem}.bam"
         ),
-    benchmark: "saffire/{ref}/benchmarks/{sample}.winnowmap2_sam.{scatteritem}.benchmark.txt",
+    benchmark: "saffire/{ref}/benchmarks/{sample}.winnowmap2_bam.{scatteritem}.benchmark.txt",
     resources:
-        mem=lambda wildcards, attempt: max(attempt * 2, 16),
+        mem=lambda wildcards, attempt: min(16 + (attempt-1) * 48, 120),
         hrs=168,
         disk_free=5,
     params:
         map_opts = MINIMAP_PARAMS,
     singularity:
         "docker://eichlerlab/align-basics:0.1"
-    threads: 8
+    threads: 4
     shell:
         """
-        winnowmap -W {input.kmer_count} -c -t {threads} -K {resources.mem}G --cs -a {params.map_opts} --MD --secondary=no --eqx -Y {input.ref} {input.fa} > {output.scatter_sam}
+        winnowmap -W {input.kmer_count} -c -t {threads} -K {resources.mem}G --cs -a {params.map_opts} --MD --secondary=no --eqx -Y {input.ref} {input.fa} | samtools view -S -b /dev/stdin > {output.scatter_bam}
         """
 
-rule combine_winnowmap_scatter_sam:
+rule combine_winnowmap_scatter_bam:
     input:
-        scatter_sams=gather.split(
-            "saffire/{{ref}}/tmp/{{sample}}.winnowmap2.{scatteritem}.sam", 
+        scatter_bams=gather.split(
+            "saffire/{{ref}}/tmp/{{sample}}.winnowmap2.{scatteritem}.bam", 
             ref = REF_DICT,
             sample = manifest_df.index,
         ),
@@ -229,7 +229,7 @@ rule combine_winnowmap_scatter_sam:
     threads: 8
     shell:
         """
-        awk '!seen[$0]++' {input.scatter_sams} | samtools view -bS - | samtools sort -@ {threads} - > {output.bam}
+        samtools merge -@ {threads} -u {input.scatter_bams} | samtools sort -@ {threads} -o {output.bam}
         """
 
 rule combine_winnowmap_paf:
@@ -289,7 +289,7 @@ rule make_minimap_bam:
         hrs = 120
     shell:
         '''
-        minimap2 -c -t {threads} -K {resources.mem}G --cs -a {params.map_opts} --MD --secondary=no --eqx -Y {input.ref} {input.fa} | samtools view -S -b /dev/stdin | samtools sort -@ {threads} /dev/stdin > {output.bam}
+        minimap2 -c -t {threads} -K {resources.mem}G --cs -a {params.map_opts} --MD --secondary=no --eqx -Y {input.ref} {input.fa} | samtools view -S -b /dev/stdin | samtools sort -@ {threads} -o {output.bam}
         '''
     
 
@@ -307,7 +307,7 @@ rule make_bed:
         hrs = 1
     shell:
         '''
-        awk -vOFS="\t" '{{print $6,$8,$9,$1,$12}}' {input.paf} | bedtools sort -g {input.genome_index} -i - > {output.bed}
+        awk -vOFS="\t" '{{print $6,$8,$9,$1,$12}}' {input.paf} | bedtools sort -g {input.genome_index} > {output.bed}
         '''
 
 # rule split_paf:

@@ -8,7 +8,7 @@ MANIFEST = config.get("MANIFEST", "config/manifest.tab")
 
 MODE = config.get("MODE", "lite")
 LINEAGE = config.get("LINEAGE", "primates")
-MB_DOWNLOADS = config.get("MB_DOWNLOADS", "/net/eichler/vol28/software/modules-sw/compleasm/0.2.6/Linux/Ubuntu22.04/x86_64/mb_downloads/")
+BUSCO_DB_PATH = config.get("DB_DIR", "/net/eichler/vol28/eee_shared/buscodb/")
 
 SNAKEMAKE_DIR = os.path.dirname(workflow.snakefile)
 
@@ -53,13 +53,13 @@ rule compleasm_run:
         mem=16,
         hrs=2,
     params:
-        mb_downloads=MB_DOWNLOADS,
+        db_path=BUSCO_DB_PATH,
         mode=MODE,
         lineage=LINEAGE,
     singularity:
         "docker://eichlerlab/compleasm:0.2.6"
     shell:
         """
-        compleasm.py run -a {input.asm_fasta} -o compleasm/results/{wildcards.sample} -t {threads} -l {params.lineage} -m {params.mode} -L {params.mb_downloads}
+        compleasm.py run -a {input.asm_fasta} -o compleasm/results/{wildcards.sample} -t {threads} -l {params.lineage} -m {params.mode} -L {params.db_path}
         """
 
