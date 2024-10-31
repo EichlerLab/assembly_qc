@@ -12,25 +12,11 @@ import re
 #fai = f"{fasta}.fai"
 #tsv = output.tsv
 
-fasta_set_files = snakemake.input.fasta_set
-telo_tsvs = snakemake.input.telo_tsvs
-output_files = snakemake.output
+fasta_file = snakemake.input.fasta
+output_file = snakemake.output.stats
 
 nt_df_header = ["sample","asm_type","haplotype","num_of_contigs","num_of_scaftigs","bases","ungapped_bases","cnt_A","cnt_T","cnt_G","cnt_C","cnt_N","fai"]
 
-def get_telo_info(telo_tsv):
-    if re.search(".scaftig.", telo_tsv):
-        asm_type = "scaftig"
-    else:
-        asm_type = "contig"
-    telo_df = pd.read_csv(telo_tsv, sep="\t", header=0)
-    telo_df["width"] = telo_df["end"] - telo_df["start"]
-    telo_df = telo_df[telo_df["width"]>=100]
-    telo_df[["forward","backward"]] = 0
-    telo_df.loc[(telo_df["start"] == 0), "forward"] = 1
-    telo_df.loc[(telo_df["end"] == telo_df["backward"])] = 1
-    print (telo_df)
-    
 
 def get_nt_length(fasta):
     
@@ -96,52 +82,42 @@ def get_contig_stats(fai_files):
     return pd.Series([int(over_100k_bases), int(l50), int(n50), int(largest_size), int(aun)])
 
 def main():
-    output = output_files[0]
-    nt_df = pd.DataFrame(columns = nt_df_header)
-    for telo_tsv in telo_tsvs:
-        get_telo_info(telo_tsv)
-
-    for fasta in fasta_set_files:
-        print (fasta)
-        continue
-        df = get_nt_length(fasta)
-        nt_df = pd.concat([nt_df, df], ignore_index=True)
-
-    sys.exit()
-    nt_df = nt_df[~((nt_df["asm_type"] == "scaftig") & (nt_df["cnt_N"] == 0))].reset_index(drop=True)
-    samples = nt_df["sample"].unique()
-    asm_types = nt_df["asm_type"].unique()
-    numeric_cols = ["num_of_contigs","num_of_scaftigs","bases","ungapped_bases","cnt_A","cnt_T","cnt_G","cnt_C","cnt_N"]
-    for sample in samples:
-        for asm_type in asm_types:
-            print (sample, asm_type)
-            all_assigned_df = nt_df[(nt_df["sample"] == sample) & (nt_df["asm_type"] == asm_type) & (nt_df["haplotype"] != "unassigned")]
-            summed_nt_values = all_assigned_df[numeric_cols].sum()
-            new_row_df = pd.DataFrame({
-                "sample": [sample],
-                "asm_type": [asm_type],
-                "haplotype": ["all_assigned"],
-                "num_of_contigs": [summed_nt_values["num_of_contigs"]],
-                "num_of_scaftigs": [summed_nt_values["num_of_scaftigs"]],
-                "bases": [summed_nt_values["bases"]],
-                "ungapped_bases": [summed_nt_values["ungapped_bases"]],
-                "cnt_A": [summed_nt_values["cnt_A"]],
-                "cnt_T": [summed_nt_values["cnt_T"]],
-                "cnt_G": [summed_nt_values["cnt_G"]],
-                "cnt_C": [summed_nt_values["cnt_C"]],
-                "cnt_N": [summed_nt_values["cnt_N"]],
-                "fai": [" ".join(all_assigned_df["fai"].unique())],
-            })
-            print (new_row_df)
-            print (nt_df)
-            nt_df = pd.concat([nt_df, new_row_df])
-            print ("MERGED")
-            print (nt_df)
+    fasta = fasta_file
+    output = output_file
+    nt_df = get_nt_length(fasta)
+    # samples = nt_df["sample"].unique()
+    # asm_types = nt_df["asm_type"].unique()
+    # numeric_cols = ["num_of_contigs","num_of_scaftigs","bases","ungapped_bases","cnt_A","cnt_T","cnt_G","cnt_C","cnt_N"]
+    # for sample in samples:
+    #     for asm_type in asm_types:
+    #         print (sample, asm_type)
+    #         all_assigned_df = nt_df[(nt_df["sample"] == sample) & (nt_df["asm_type"] == asm_type) & (nt_df["haplotype"] != "unassigned")]
+    #         summed_nt_values = all_assigned_df[numeric_cols].sum()
+    #         new_row_df = pd.DataFrame({
+    #             "sample": [sample],
+    #             "asm_type": [asm_type],
+    #             "haplotype": ["all_assigned"],
+    #             "num_of_contigs": [summed_nt_values["num_of_contigs"]],
+    #             "num_of_scaftigs": [summed_nt_values["num_of_scaftigs"]],
+    #             "bases": [summed_nt_values["bases"]],
+    #             "ungapped_bases": [summed_nt_values["ungapped_bases"]],
+    #             "cnt_A": [summed_nt_values["cnt_A"]],
+    #             "cnt_T": [summed_nt_values["cnt_T"]],
+    #             "cnt_G": [summed_nt_values["cnt_G"]],
+    #             "cnt_C": [summed_nt_values["cnt_C"]],
+    #             "cnt_N": [summed_nt_values["cnt_N"]],
+    #             "fai": [" ".join(all_assigned_df["fai"].unique())],
+    #         })
+    #         print (new_row_df)
+    #         print (nt_df)
+    #         nt_df = pd.concat([nt_df, new_row_df])
+    #         print ("MERGED")
+    #         print (nt_df)
     nt_df["gc_content"] = ((nt_df["cnt_G"]+nt_df["cnt_C"])/nt_df["ungapped_bases"]) * 100
     contig_stats_header = ["over_100k_bases", "l50", "n50", "largest_size", "aun"]
     nt_df[contig_stats_header] = nt_df["fai"].apply(get_contig_stats)
     nt_df = nt_df[["sample","asm_type","haplotype","num_of_contigs","num_of_scaftigs","bases","gc_content","l50", "n50", "largest_size", "aun"]]
-#    nt_df.to_csv(output, sep="\t", index=None, header=True)
+    nt_df.to_csv(output, sep="\t", index=None, header=True)
     
 
 if __name__=="__main__":

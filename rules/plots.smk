@@ -49,23 +49,12 @@ full_manifest_df.set_index("SAMPLE",inplace=True) ## manifest df for merqury
 conv_manifest_df.set_index("SAMPLE",inplace=True) ## shortened df using only SAMPLE / ASM fields
 
 
-rule gather_plots:
-    input:
-        expand("contig_stats/n50/{sample}.n50.stats", sample = conv_manifest_df.index),
-        expand("contig_stats/plots/{sample}.dist.log.png", sample = conv_manifest_df.index),
-        expand("contig_stats/plots/{sample}.scatter.log.png", sample = conv_manifest_df.index),
-        expand("ideo_plots/{aligner}/{asm}.ideoplot.pdf", asm = full_manifest_df.index, aligner = ALIGNER),
-        expand("ploidy_plots/{aligner}/{asm}.summary.txt", asm = full_manifest_df.index, aligner = ALIGNER),
-
-
-rule make_contig_stats:
+rule get_contig_length_plot:
     input:
         asm_fasta = find_fasta,
     output:
-        n50_stats = "contig_stats/n50/{sample}.n50.stats",
-        dist_plot = "contig_stats/plots/{sample}.dist.log.png",
-        scatter_plot = "contig_stats/plots/{sample}.scatter.log.png",
-        flag = "contig_stats/{sample}.contig_stats.done"
+        dist_plot = "plots/contigs/{sample}.dist.log.png",
+        scatter_plot = "plots/contigs/{sample}.scatter.log.png",
     threads:
         1
     resources:
@@ -75,15 +64,14 @@ rule make_contig_stats:
         script_path = N50_SCRIPT
     shell:
         '''
-        {params.script_path} {input.asm_fasta} -p {output.scatter_plot} -d {output.dist_plot} -t {wildcards.sample} -l > {output.n50_stats}
-        touch {output.flag}
+        {params.script_path} {input.asm_fasta} -p {output.scatter_plot} -d {output.dist_plot} -t {wildcards.sample} -l -n
         '''
 
-rule make_ideo_plot:
+rule get_ideo_plot:
     input:
         hap_beds = find_all_bed_set
     output:
-        pdf = "ideo_plots/{aligner}/{asm}_to_{ref}.ideoplot.pdf",
+        pdf = "plots/ideo/{aligner}/{asm}_to_{ref}.ideoplot.pdf",
     threads:
         1
     resources:
@@ -99,14 +87,13 @@ rule make_ideo_plot:
     script:
         f"{SNAKEMAKE_DIR}/../scripts/ideo_plot.py"
 
-rule make_ploidy_plot:
+rule get_ploidy_plot:
     input:
-        hap_one_paf = "saffire/results/{asm}_hap1/alignments/{asm}_hap1.{aligner}.paf",
-        hap_two_paf = "saffire/results/{asm}_hap2/alignments/{asm}_hap2.{aligner}.paf",
-
+        hap_one_paf = "saffire/{ref}/results/{asm}_hap1/alignments/{asm}_hap1.{aligner}.paf",
+        hap_two_paf = "saffire/{ref}/results/{asm}_hap2/alignments/{asm}_hap2.{aligner}.paf",
     output:
-        pdf = "ploidy_plots/{aligner}/{asm}.ploidy.pdf",
-        summary = "ploidy_plots/{aligner}/{asm}.summary.txt",
+        pdf = "plots/ploidy/{ref}/{aligner}/{asm}.ploidy.pdf",
+        summary = "plots/ploidy/{ref}/{aligner}/{asm}.summary.txt",
     threads:
         1
     resources:

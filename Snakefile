@@ -38,6 +38,95 @@ conv_manifest_df = get_asm_manifest_df(full_manifest_df)
 full_manifest_df.set_index("SAMPLE",inplace=True) ## manifest df for merqury
 conv_manifest_df.set_index("SAMPLE",inplace=True) ## shortened df using only SAMPLE / ASM fields
 
+def get_all_inputs():
+    inputs = [
+        expand(
+            "stats/seq_stats/{sample}.scaftig.stats",
+            sample=conv_manifest_df.index.values,
+        ),
+        expand(
+            "stats/seq_stats/{sample}.contig.stats",
+            sample=conv_manifest_df.index.values,
+        ),
+        expand(
+            "merqury/results/{asm}/{asm}.qv",
+            asm=full_manifest_df.index.values,
+        ),
+        expand(
+            "saffire/{ref}/results/{sample}/alignments/{sample}.{aligner}.paf",
+            ref=REF_DICT,
+            sample=conv_manifest_df.index.values,
+            aligner=ALIGNER,
+        ),
+        expand(
+            "saffire/{ref}/results/{sample}/alignments/{sample}.{aligner}.bam",
+            ref=REF_DICT,
+            sample=conv_manifest_df.index.values,
+            aligner=ALIGNER,
+        ),
+        expand(
+            "saffire/{ref}/results/{sample}/beds/{sample}.{aligner}.bed",
+            ref=REF_DICT,
+            sample=conv_manifest_df.index.values,
+            aligner=ALIGNER,
+        ),
+        expand(
+            rules.cpl_compleasm_run.output.summary,
+            sample=conv_manifest_df.index.values,
+        ),
+        expand(
+            "plots/contigs/{sample}.scatter.log.png",
+            sample=conv_manifest_df.index.values,
+        ),
+        expand(
+            "plots/ideo/{aligner}/{asm}_to_{ref}.ideoplot.pdf",
+            ref=REF_DICT,
+            asm=full_manifest_df.index.values,
+            aligner=ALIGNER,            
+        ),
+    ]
+
+    ploidy_inputs = expand(
+        "plots/ploidy/{ref}/{aligner}/{asm}.ploidy.pdf",
+        ref=REF_DICT,
+        asm=[
+            asm for asm in full_manifest_df.index.values
+            if not pd.isna(full_manifest_df.at[asm, "H2"])
+        ],
+        aligner=ALIGNER,
+    )
+    inputs.extend(ploidy_inputs)
+
+    return inputs
+
+def get_plot_inputs():
+    inputs = [
+
+        expand(
+            "plots/ideo/{aligner}/{asm}_to_{ref}.ideoplot.pdf",
+            ref=REF_DICT,
+            asm=full_manifest_df.index.values,
+            aligner=ALIGNER,
+        ),
+        expand(
+            "plots/contigs/{sample}.scatter.log.png",
+            sample=conv_manifest_df.index.values,
+        )
+    ]
+
+    ploidy_inputs = expand(
+        "plots/ploidy/{ref}/{aligner}/{asm}.ploidy.pdf",
+        ref=REF_DICT,
+        asm=[
+            asm for asm in full_manifest_df.index.values
+            if not pd.isna(full_manifest_df.at[asm, "H2"])
+        ],
+        aligner=ALIGNER,
+    )
+    inputs.extend(ploidy_inputs)
+
+    return inputs
+
 module merqury:
     snakefile:
         "rules/merqury.smk"
@@ -90,76 +179,40 @@ localrules:
 
 rule all:
     input:
-        expand(
-            rules.cst_calculate_stats.output.tsv,
-            asm=full_manifest_df.index.values,
-        ),
-        expand(            
-            "merqury/results/{asm}/{asm}.qv",
-            asm=full_manifest_df.index.values,
-        ),
-        expand(
-            "saffire/{ref}/results/{sample}/alignments/{sample}.{aligner}.paf",
-            ref=REF_DICT,
-            sample=conv_manifest_df.index.values,
-            aligner=ALIGNER,
-        ),
-        expand(
-            "saffire/{ref}/results/{sample}/alignments/{sample}.{aligner}.bam",
-            ref=REF_DICT,
-            sample=conv_manifest_df.index.values,
-            aligner=ALIGNER,
-        ),
-        expand(
-            "saffire/{ref}/results/{sample}/beds/{sample}.{aligner}.bed",
-            ref=REF_DICT,
-            sample=conv_manifest_df.index.values,
-            aligner=ALIGNER,
-        ),
-        expand(
-            rules.cpl_compleasm_run.output.summary,
-            sample=conv_manifest_df.index.values,
-        ),
+        get_all_inputs()
 
     default_target: True
 
 rule get_saf:
+    input:
         expand(
             "saffire/{ref}/results/{sample}/saff/{sample}.{aligner}.saf",
             ref=REF_DICT,
             sample=conv_manifest_df.index.values,
             aligner=ALIGNER,
-        )
+        ),
 
 rule get_compleasm:
+    input:
         expand(
             rules.cpl_compleasm_run.output.summary,
             sample=conv_manifest_df.index.values,
         ),
 
 rule get_cleaned_fasta:
+    input:
         expand(
             "fcs_cleaned_fasta/{sample}/{sample}.fasta",
             sample=conv_manifest_df.index.values,
         ),    
 
 rule get_qv:
+    input:
         expand(            
             "merqury/results/{asm}/{asm}.qv",
             asm=full_manifest_df.index.values,
         ),
 
-
-
-# rule all:
-#     # fcs as default
-#     input:
-#         # ploidy plot for assembly
-#         expand(
-#             rules.plt_make_ploidy_plot.output.summary,
-#             asm=full_manifest_df.index,
-#             aligner = ALIGNER,
-#         ),
-
-
-
+rule get_plots:
+    input:
+        get_plot_inputs()

@@ -44,9 +44,19 @@ def find_all_fasta_set(wildcards):
         fasta_set.append(f"{wildcards.asm}_hap2")
     if not pd.isna(raw_manifest_df.at[wildcards.asm, "UNASSIGNED"]):
         fasta_set.append(f"{wildcards.asm}_unassigned")
-    all_fasta_set = [f"fcs_cleaned_fasta/{sample}/{sample}.fasta" for sample in fasta_set] + [f"fcs_cleaned_fasta/{sample}/contig_fasta/{sample}.fasta" for sample in fasta_set]
-    return all_fasta_set
+    fasta_set = [f"fcs_cleaned_fasta/{sample}/{sample}.fasta" for sample in fasta_set] + [f"fcs_cleaned_fasta/{sample}/contig_fasta/{sample}.fasta" for sample in fasta_set]
+    return fasta_set
 
+def find_all_telo_tsvs(wildcards):
+    telo_haps = [f"{wildcards.asm}_hap1"]
+    if not pd.isna(raw_manifest_df.at[wildcards.asm, "H2"]):
+        telo_haps.append(f"{wildcards.asm}_hap2")
+    telo_tsvs = [f"stats/telo/{sample}.scaftig.telo.tsv" for sample in telo_haps] + [f"stats/telo/{sample}.contig.telo.tsv" for sample in telo_haps]
+    return telo_tsvs
+
+def find_all_qv(wildcards):
+    all_qv = []
+    return all_qv
 
 rule split_scaftigs:
     input:
@@ -99,19 +109,57 @@ rule split_scaftigs:
             fasta_writer.write_file(contig_fasta_records)
         pysam.faidx(contig_fasta)
 
-rule get_telo_info:
+rule get_telo_stats:
     input:
-
-rule calculate_stats:
-    input:
-        fasta_set = find_all_fasta_set,
+        scaftig_fasta = "fcs_cleaned_fasta/{sample}/{sample}.fasta",
+        contig_fasta = "fcs_cleaned_fasta/{sample}/contig_fasta/{sample}.fasta",
     output:
-        tsv = "assembly_stats/{asm}/{asm}.tsv",
+        scaftig_telo_tbl = "stats/telo/{sample}.scaftig.telo.tbl",
+        contig_telo_tbl = "stats/telo/{sample}.contig.telo.tbl",
+    singularity:
+        "docker://eichlerlab/binf-basics:0.1",
+    threads: 1,
+    resources:
+        hrs=4,
+        mem=6,
+    shell:
+        """
+        echo -e "seq_name\tstart\tend\tseq_length" > {output.scaftig_telo_tsv} && seqtk telo {input.scaftig_fasta} >> {output.scaftig_telo_tbl}
+        echo -e "seq_name\tstart\tend\tseq_length" > {output.contig_telo_tsv} && seqtk telo {input.contig_fasta} >> {output.contig_telo_tbl}
+        """
+
+rule get_contig_stats:
+    input:
+        fasta = "fcs_cleaned_fasta/{sample}/contig_fasta/{sample}.fasta"
+    output:
+        stats = "stats/seq_stats/{sample}.contig.stats",
     threads: 1,
     resources:
         mem=lambda wildcards, attempt: attempt * 16,
         hrs=4,
-    benchmark:
-        "assembly_stats/benchmark/{asm}.benchmark.txt"
     script:
-        f"{SNAKEMAKE_ROOT_DIR}/scripts/assembly_stats.py"
+        f"{SNAKEMAKE_ROOT_DIR}/scripts/fasta_stats.py"
+
+rule get_scaftig_stats:
+    input:
+        fasta = "fcs_cleaned_fasta/{sample}/{sample}.fasta"
+    output:
+        stats = "stats/seq_stats/{sample}.scaftig.stats",
+    threads: 1,
+    resources:
+        mem=lambda wildcards, attempt: attempt * 16,
+        hrs=4,
+    script:
+        f"{SNAKEMAKE_ROOT_DIR}/scripts/fasta_stats.py"
+
+# rule summarize_stats:
+#     input:
+#         qv_files = find_all_qv
+#     output:
+#         summary = "stats/summary/{asm}.summary.tsv"
+#     threads: 1,
+#     resources:
+#         mem=8,
+#         hrs=4,
+#     run:
+
