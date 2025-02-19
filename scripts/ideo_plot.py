@@ -91,7 +91,7 @@ def chromosome_collections(df, y_positions, height, ptype, pname, **kwargs):
                         )
                     else:
                         yield BrokenBarHCollection(
-                            [hatch_coords], (y_positions[chrom]+(height*(0)**(pivot[i][0]))-(gene_height*2+chrom_height+gene_padding*2), height), facecolors=asm_color_dict[pname][pivot[i][0]], **kwargs
+                            [hatch_coords], (y_positions[chrom]+(height*(0)**(pivot[i][0]))-(gene_height*2+chrom_height+gene_padding*2), height), facecolors=asm_color_dict[pname][pivot[i][0]], hatch='/', **kwargs
                         )
                 current_sequence = sequence
                 start_hatch = ends[i]
