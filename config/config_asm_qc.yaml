@@ -9,7 +9,10 @@ REF:
     PATH: /net/eichler/vol28/eee_shared/assemblies/hg38/no_alt/hg38.no_alt.fa
     CHROMS: /net/eichler/vol28/eee_shared/assemblies/hg38/no_alt/genome.txt
     CYTO: /net/eichler/vol28/eee_shared/assemblies/hg38/no_alt/anno/cyto.bed ## Optional
-    
+
+### ModDotPlot
+BED: config/moddot_regions.bed
+
 ### saffire 
 ALIGNER: # ( minimap2 | winnowmap )
   - minimap2

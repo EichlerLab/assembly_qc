@@ -32,6 +32,14 @@ def get_asm_manifest_df(manifest_df):
     return pd.DataFrame(df_transform)
 
 
+BED = config.get('BED', 'config/moddot_regions.bed')
+bed_df = pd.read_csv(
+    BED, sep="\t", header=None, names=["chr", "start", "end"], dtype=str
+)
+bed_df["NAME"] = bed_df["chr"] + "_" + bed_df["start"] + "_" + bed_df["end"]
+bed_df.set_index("NAME", drop=True, inplace=True)
+
+
 full_manifest_df = pd.read_csv(MANIFEST, header=0, sep='\t', comment='#')
 conv_manifest_df = get_asm_manifest_df(full_manifest_df)
 
@@ -84,6 +92,12 @@ def get_all_inputs():
             asm=full_manifest_df.index.values,
             aligner=ALIGNER,            
         ),
+        expand(
+            "moddotplot/results/{sample}/.{region}.done",
+            sample=conv_manifest_df.index.values,
+            region=bed_df.index.values,
+        )
+        
     ]
 
     ploidy_inputs = expand(
@@ -111,6 +125,11 @@ def get_plot_inputs():
         expand(
             "plots/contigs/{sample}.scatter.log.png",
             sample=conv_manifest_df.index.values,
+        ),
+        expand(
+            "moddotplot/results/{sample}/.{region}.done",
+            sample=conv_manifest_df.index.values,
+            region=bed_df.index.values,
         )
     ]
 
@@ -168,6 +187,13 @@ module stats:
     config:
         config
 use rule * from stats as cst_*
+
+module moddot:
+    snakefile:
+        "rules/moddotplot.smk"
+    config:
+        config
+use rule * from moddot as mdp_*
 
 localrules:
     mer_agg_hapmers,

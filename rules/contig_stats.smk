@@ -124,13 +124,14 @@ rule get_telo_stats:
         mem=6,
     shell:
         """
-        echo -e "seq_name\tstart\tend\tseq_length" > {output.scaftig_telo_tsv} && seqtk telo {input.scaftig_fasta} >> {output.scaftig_telo_tbl}
-        echo -e "seq_name\tstart\tend\tseq_length" > {output.contig_telo_tsv} && seqtk telo {input.contig_fasta} >> {output.contig_telo_tbl}
+        echo -e "seq_name\tstart\tend\tseq_length" > {output.scaftig_telo_tbl} && seqtk telo {input.scaftig_fasta} >> {output.scaftig_telo_tbl}
+        echo -e "seq_name\tstart\tend\tseq_length" > {output.contig_telo_tbl} && seqtk telo {input.contig_fasta} >> {output.contig_telo_tbl}
         """
 
 rule get_contig_stats:
     input:
-        fasta = "fcs_cleaned_fasta/{sample}/contig_fasta/{sample}.fasta"
+        fasta = "fcs_cleaned_fasta/{sample}/contig_fasta/{sample}.fasta",
+        telo_tbl = "stats/telo/{sample}.contig.telo.tbl",
     output:
         stats = "stats/seq_stats/{sample}.contig.stats",
     threads: 1,
@@ -142,7 +143,8 @@ rule get_contig_stats:
 
 rule get_scaftig_stats:
     input:
-        fasta = "fcs_cleaned_fasta/{sample}/{sample}.fasta"
+        fasta = "fcs_cleaned_fasta/{sample}/{sample}.fasta",
+        telo_tbl = "stats/telo/{sample}.scaftig.telo.tbl",
     output:
         stats = "stats/seq_stats/{sample}.scaftig.stats",
     threads: 1,
