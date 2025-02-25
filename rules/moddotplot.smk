@@ -6,6 +6,7 @@ import os
 import pandas as pd
 import numpy as np
 import re
+import glob
 
 
 configfile: 'config/config_asm_qc.yaml'
@@ -40,8 +41,6 @@ try:
 except KeyError:
     REF = "/net/eichler/vol28/eee_shared/assemblies/CHM13/T2T/v2.0/T2T-CHM13v2.fasta"
 
-
-
 # rustybam/0.1.16
 
 def cigar_tuple(cigar):
@@ -64,6 +63,28 @@ def find_tigs(wildcards):
             tig_dict[f'{sample}_{region}_p'] = rules.tag_contigs.output.p.format(sample=sample,region=region)
     return tig_dict
 
+rule summarize_moddot_results:
+    input:
+        directory("moddotplot/results/{sample}")
+    output:
+        tsv = "moddotplot/results/{sample}.generated_acros.tsv"
+    resources:
+        mem=4,
+        hrs=1,
+    threads: 1
+    run:
+        acros = ['chr13', 'chr14', 'chr15', 'chr21', 'chr22']
+        header = ["Haplotype"]+acros
+        called = [[wildcards.sample]]
+        plot_dir=f"moddotplot/results/{wildcards.sample}"
+        for chrom in acros:
+            if len(glob.glob(f"{plot_dir}/{chrom}_1_*"))>0:
+                called[0].append("True")
+            else:
+                called[0].append("False")
+        result_df = pd.DataFrame(called, columns = header)
+        result_df.to_csv(output.tsv, sep="\t", index=False)
+                
 
 rule subset_target_region:
     input:

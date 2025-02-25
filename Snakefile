@@ -12,7 +12,7 @@ SNAKEMAKE_DIR = os.path.dirname(workflow.snakefile)
 IDEO_PLOT_SCRIPT = "/net/eichler/vol28/7200/software/pipelines/compteam_tools/ideo_plot.py"
 N50_SCRIPT = "/net/eichler/vol28/7200/software/pipelines/compteam_tools/n50"
 PLOIDY_PLOT_SCRIPT = f"{SNAKEMAKE_DIR}/scripts/ploidy.R"
-
+TAXID = config.get("TAXID", "9606")
 REF_DICT = config["REF"]
 ALIGNER = config.get('ALIGNER',"minimap2")
 
@@ -92,11 +92,6 @@ def get_all_inputs():
             asm=full_manifest_df.index.values,
             aligner=ALIGNER,            
         ),
-        expand(
-            "moddotplot/results/{sample}/.{region}.done",
-            sample=conv_manifest_df.index.values,
-            region=bed_df.index.values,
-        )
         
     ]
 
@@ -109,7 +104,15 @@ def get_all_inputs():
         ],
         aligner=ALIGNER,
     )
+
+    moddot_inputs = expand(
+        "moddotplot/results/{sample}.generated_acros.tsv",
+        sample=conv_manifest_df.index.values,
+    )
+
     inputs.extend(ploidy_inputs)
+    if int(TAXID) == 9606: # human
+        inputs.extend(moddot_inputs)
 
     return inputs
 
@@ -126,11 +129,6 @@ def get_plot_inputs():
             "plots/contigs/{sample}.scatter.log.png",
             sample=conv_manifest_df.index.values,
         ),
-        expand(
-            "moddotplot/results/{sample}/.{region}.done",
-            sample=conv_manifest_df.index.values,
-            region=bed_df.index.values,
-        )
     ]
 
     ploidy_inputs = expand(
@@ -142,7 +140,16 @@ def get_plot_inputs():
         ],
         aligner=ALIGNER,
     )
+
+    moddot_inputs = expand(
+        "moddotplot/results/{sample}.generated_acros.tsv",
+        sample=conv_manifest_df.index.values,
+    )
+
+
     inputs.extend(ploidy_inputs)
+    if int(TAXID) == 9606: # human
+        inputs.extend(moddot_inputs)
 
     return inputs
 
