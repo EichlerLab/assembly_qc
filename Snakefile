@@ -96,22 +96,20 @@ def get_all_inputs():
     ]
 
     ploidy_inputs = expand(
-        "plots/ploidy/{ref}/{aligner}/{asm}.ploidy.pdf",
-        ref=REF_DICT,
+        "plots/ploidy/CHM13/{aligner}/{asm}.ploidy.pdf",
         asm=[
             asm for asm in full_manifest_df.index.values
             if not pd.isna(full_manifest_df.at[asm, "H2"])
         ],
         aligner=ALIGNER,
     )
-
     moddot_inputs = expand(
         "moddotplot/results/{sample}.generated_acros.tsv",
         sample=conv_manifest_df.index.values,
     )
 
-    inputs.extend(ploidy_inputs)
     if int(TAXID) == 9606: # human
+        inputs.extend(ploidy_inputs)
         inputs.extend(moddot_inputs)
 
     return inputs
@@ -132,8 +130,7 @@ def get_plot_inputs():
     ]
 
     ploidy_inputs = expand(
-        "plots/ploidy/{ref}/{aligner}/{asm}.ploidy.pdf",
-        ref=REF_DICT,
+        "plots/ploidy/CHM13/{aligner}/{asm}.ploidy.pdf",
         asm=[
             asm for asm in full_manifest_df.index.values
             if not pd.isna(full_manifest_df.at[asm, "H2"])
@@ -146,9 +143,8 @@ def get_plot_inputs():
         sample=conv_manifest_df.index.values,
     )
 
-
-    inputs.extend(ploidy_inputs)
     if int(TAXID) == 9606: # human
+        inputs.extend(ploidy_inputs)    
         inputs.extend(moddot_inputs)
 
     return inputs

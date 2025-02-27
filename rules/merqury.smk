@@ -165,7 +165,7 @@ rule meryl_combine:
     output:
         meryl=directory("merqury/meryl/{sample}/{sample}_all.meryl"),
     resources:
-        mem=lambda wildcards, attempt: (2 ** (attempt-1)) * 64,
+        mem=lambda wildcards, attempt: (2 ** (attempt-1)) * 128,
         hrs=48,
     threads: 1
     singularity:
