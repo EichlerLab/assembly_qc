@@ -67,12 +67,6 @@ def get_all_inputs():
             aligner=ALIGNER,
         ),
         expand(
-            "saffire/{ref}/results/{sample}/alignments/{sample}.{aligner}.bam",
-            ref=REF_DICT,
-            sample=conv_manifest_df.index.values,
-            aligner=ALIGNER,
-        ),
-        expand(
             "saffire/{ref}/results/{sample}/beds/{sample}.{aligner}.bed",
             ref=REF_DICT,
             sample=conv_manifest_df.index.values,
@@ -92,6 +86,12 @@ def get_all_inputs():
             asm=full_manifest_df.index.values,
             aligner=ALIGNER,            
         ),
+        expand(
+            "saffire/{ref}/results/merged_paf/{aligner}/{asm}.concat.paf",
+            ref=REF_DICT,
+            asm=full_manifest_df.index.values,
+            aligner=ALIGNER,
+        )
         
     ]
 

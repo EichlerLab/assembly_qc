@@ -13,11 +13,6 @@ REF:
 ### ModDotPlot
 BED: config/moddot_regions.bed
 
-### saffire 
-ALIGNER: # ( minimap2 | winnowmap )
-  - minimap2
-  - winnomap
-
 ### compleasm
 DB_PATH: /net/eichler/vol28/eee_shared/buscodb/
 LINEAGE: primates

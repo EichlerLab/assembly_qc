@@ -41,6 +41,7 @@ scattergather:
 
 wildcard_constraints:
     sample='|'.join(manifest_df.index),
+    alinger='minimap2',
 
 
 def find_ref_fa(wildcards):
@@ -54,7 +55,15 @@ def find_fasta_index(wildcards):
 
 def find_contigs(wildcards):
     return gather.split('saffire/{ref}/tmp/{sample}.{aligner}.{scatteritem}.broken.paf', ref=wildcards.ref, sample=wildcards.sample, aligner=wildcards.aligner)
-        
+
+def find_all_paf(wildcards):
+    avail_pafs = []
+    haps = ["hap1","hap2","unassigned"]
+    values = raw_manifest_df.loc[raw_manifest_df["SAMPLE"] == wildcards.asm][["H1","H2","UNASSIGNED"]].iloc[0].tolist()
+    for idx, hap in enumerate(haps):
+        if not str(values[idx]) == "nan":
+            avail_pafs.append (f'saffire/{wildcards.ref}/results/{wildcards.asm}_{hap}/alignments/{wildcards.asm}_{hap}.{wildcards.aligner}.paf')
+    return avail_pafs
 
 checkpoint copy_ref_fasta:
     input:
@@ -161,96 +170,6 @@ rule split_fasta:
         samtools faidx {input.fasta} -r {input.batch_file} > {output.scatter_fasta}
         """
 
-
-rule make_winnowmap_scatter_paf:
-    input:
-        ref = "saffire/{ref}/reference/{ref}.fa",
-        kmer_count = rules.get_kmer_count.output.kmer_count,
-        fa = "saffire/tmp/{sample}.{scatteritem}.fasta"
-    output:
-        scatter_paf=temp(
-            "saffire/{ref}/tmp/{sample}.winnowmap2.{scatteritem}.aln.paf"
-        ),
-    benchmark: "saffire/{ref}/benchmarks/{sample}.winnowmap2_paf.{scatteritem}.benchmark.txt",
-    resources:
-        mem=lambda wildcards, attempt: min(16 + (attempt-1) * 48, 120),
-        hrs=168,
-        disk_free=5,
-    params:
-        map_opts = MINIMAP_PARAMS,
-    singularity:
-        "docker://eichlerlab/align-basics:0.1"
-    threads: 4,
-    shell:
-        """
-        winnowmap -W {input.kmer_count} -c -t {threads} -K {resources.mem}G --cs {params.map_opts} --secondary=no --eqx -Y {input.ref} {input.fa} > {output.scatter_paf}
-        """
-
-
-rule make_winnowmap_scatter_bam:
-    input:
-        ref = "saffire/{ref}/reference/{ref}.fa",
-        kmer_count = rules.get_kmer_count.output.kmer_count,
-        fa = "saffire/tmp/{sample}.{scatteritem}.fasta"
-    output:
-        scatter_bam=temp(
-            "saffire/{ref}/tmp/{sample}.winnowmap2.{scatteritem}.bam"
-        ),
-    benchmark: "saffire/{ref}/benchmarks/{sample}.winnowmap2_bam.{scatteritem}.benchmark.txt",
-    resources:
-        mem=lambda wildcards, attempt: min(16 + (attempt-1) * 48, 120),
-        hrs=168,
-        disk_free=5,
-    params:
-        map_opts = MINIMAP_PARAMS,
-    singularity:
-        "docker://eichlerlab/align-basics:0.1"
-    threads: 4
-    shell:
-        """
-        winnowmap -W {input.kmer_count} -c -t {threads} -K {resources.mem}G --cs -a {params.map_opts} --MD --secondary=no --eqx -Y {input.ref} {input.fa} | samtools view -S -b /dev/stdin > {output.scatter_bam}
-        """
-
-rule combine_winnowmap_scatter_bam:
-    input:
-        scatter_bams=gather.split(
-            "saffire/{{ref}}/tmp/{{sample}}.winnowmap2.{scatteritem}.bam", 
-            ref = REF_DICT,
-            sample = manifest_df.index,
-        ),
-    output:
-        bam="saffire/{ref}/results/{sample}/alignments/{sample}.winnowmap2.bam",
-    resources:
-        mem=12,
-        hrs=48,
-        disk_free=5,
-    singularity:
-        "docker://eichlerlab/binf-basics:0.1"
-    threads: 8
-    shell:
-        """
-        samtools merge -@ {threads} -u {input.scatter_bams} | samtools sort -@ {threads} -o {output.bam}
-        """
-
-rule combine_winnowmap_paf:
-    input:
-        scatter_pafs=gather.split(
-            "saffire/{{ref}}/tmp/{{sample}}.winnowmap2.{scatteritem}.aln.paf",
-            ref = REF_DICT,
-            sample = manifest_df.index,
-        ),
-    output:
-        paf="saffire/{ref}/results/{sample}/alignments/{sample}.winnowmap2.paf"
-    resources:
-        mem=8,
-        hrs=12,
-        disk_free=1,
-    threads: 1
-    shell:
-        """
-        awk '!seen[$0]++' {input.scatter_pafs} > {output.paf}
-        """
-
 rule make_minimap_paf:
     input:
         fa = find_fasta,
@@ -271,7 +190,6 @@ rule make_minimap_paf:
         minimap2 -c -t {threads} -K {resources.mem}G --cs {params.map_opts} --secondary=no --eqx -Y {input.ref} {input.fa} > {output.paf}
         '''
 
-
 rule make_minimap_bam:
     input:
         fa = find_fasta,
@@ -291,7 +209,6 @@ rule make_minimap_bam:
         '''
         minimap2 -c -t {threads} -K {resources.mem}G --cs -a {params.map_opts} --MD --secondary=no --eqx -Y {input.ref} {input.fa} | samtools view -S -b /dev/stdin | samtools sort -@ {threads} -o {output.bam}
         '''
-    
 
 rule make_bed:
     input:
@@ -362,6 +279,19 @@ rule trim_break_orient_paf:
         '''
         rustybam orient {input.paf} | rustybam trim-paf | rb filter --paired-len 1000000 > {output.contig}
         rustybam break-paf --max-size {params.sv_size} {output.contig} > {output.broken}
+        '''
+rule concat_pafs:
+    input:
+        paf = find_all_paf
+    output:
+        paf = 'saffire/{ref}/results/merged_paf/{aligner}/{asm}.concat.paf'
+    threads:1 
+    resources:
+        mem=4,
+        hrs=1
+    shell:
+        '''
+        cat {input.paf} > {output.paf}
         '''
 
 rule combine_paf:

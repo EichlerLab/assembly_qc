@@ -36,6 +36,8 @@ bed_df = pd.read_csv(
 bed_df["NAME"] = bed_df["chr"] + "_" + bed_df["start"] + "_" + bed_df["end"]
 bed_df.set_index("NAME", drop=True, inplace=True)
 
+acros = ['chr13', 'chr14', 'chr15', 'chr21', 'chr22']
+
 try:
     REF = config["REF"]["CHM13"]["PATH"]
 except KeyError:
@@ -63,9 +65,12 @@ def find_tigs(wildcards):
             tig_dict[f'{sample}_{region}_p'] = rules.tag_contigs.output.p.format(sample=sample,region=region)
     return tig_dict
 
+def get_all_flag(wildcards):
+    return [ f"moddotplot/results/{wildcards.sample}/.{region}.done" for region in acros]
+
 rule summarize_moddot_results:
     input:
-        directory("moddotplot/results/{sample}")
+        
     output:
         tsv = "moddotplot/results/{sample}.generated_acros.tsv"
     resources:
@@ -73,7 +78,6 @@ rule summarize_moddot_results:
         hrs=1,
     threads: 1
     run:
-        acros = ['chr13', 'chr14', 'chr15', 'chr21', 'chr22']
         header = ["Haplotype"]+acros
         called = [[wildcards.sample]]
         plot_dir=f"moddotplot/results/{wildcards.sample}"
