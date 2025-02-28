@@ -5,7 +5,6 @@ import os
 if not os.path.exists("log"):
     os.makedirs("log")
 
-
 SNAKEMAKE_DIR = os.path.dirname(workflow.snakefile)
 
 
@@ -53,13 +52,14 @@ def agg_reads(wildcards):
         )
     )
 
-
 def find_cleaned_hap_one(wildcards):
-    return f"QC_results/contamination_screening/results/{wildcards.asm}_hap1/fasta/{wildcards.asm}_hap1.fasta"
-
+    return f"fcs_cleaned_fasta/{wildcards.asm}_hap1/{wildcards.asm}_hap1.fasta"
 
 def find_cleaned_hap_two(wildcards):
-    return f"QC_results/contamination_screening/results/{wildcards.asm}_hap2/fasta/{wildcards.asm}_hap2.fasta"
+    return f"fcs_cleaned_fasta/{wildcards.asm}_hap2/{wildcards.asm}_hap2.fasta"
+
+def find_unassigned_contig(wildcards):
+    return f"fcs_cleaned_fasta/{wildcards.asm}_unassigned/{wildcards.asm}_unassigned.fasta"
 
 
 def find_meryl(wildcards):
@@ -72,7 +72,7 @@ def find_meryl(wildcards):
 
 def find_trios(wildcards):
     return expand(
-        "QC_results/merqury/results/{asm}/trio/{asm}_trio.spectra-asm.st.png",
+        "merqury/results/{asm}/trio/{asm}_trio.spectra-asm.st.png",
         asm=manifest_df[manifest_df["TRIO"] == "YES"].index,
     )
 
@@ -104,12 +104,12 @@ def find_hapmers(wildcards):
     father = manifest_df.at[wildcards.asm, "FA_ID"]
     return " ".join(
         [
-            os.path.abspath(f"QC_results/merqury/meryl/{sample}/{sample}_all.meryl"),
+            os.path.abspath(f"merqury/meryl/{sample}/{sample}_all.meryl"),
             os.path.abspath(
-                f"QC_results/merqury/meryl/{sample}/hapmers/{sample}_all_and_{mother}_all.only.meryl"
+                f"merqury/meryl/{sample}/hapmers/{sample}_all_and_{mother}_all.only.meryl"
             ),
             os.path.abspath(
-                f"QC_results/merqury/meryl/{sample}/hapmers/{sample}_all_and_{father}_all.only.meryl"
+                f"merqury/meryl/{sample}/hapmers/{sample}_all_and_{father}_all.only.meryl"
             ),
         ]
     )
@@ -123,7 +123,7 @@ localrules:
 rule all:
     input:
         expand(
-            "QC_results/merqury/results/{asm}/{asm}.qv",
+            "merqury/results/{asm}/{asm}.qv",
             asm=manifest_df.loc[manifest_df["H1"] != "NA"].index,
         ),
         find_trios,
@@ -132,7 +132,7 @@ rule all:
 rule non_trio_only:
     input:
         expand(
-            "QC_results/merqury/results/{asm}/{asm}.qv",
+            "merqury/results/{asm}/{asm}.qv",
             asm=manifest_df.loc[manifest_df["H1"] != "NA"].index,
         ),
 
@@ -146,7 +146,7 @@ rule run_meryl:
     input:
         fastq=find_fastq,
     output:
-        meryl=temp(directory("QC_results/merqury/meryl/{sample}/{read}.meryl")),
+        meryl=temp(directory("merqury/meryl/{sample}/{read}.meryl")),
     resources:
         mem=lambda wildcards, attempt: attempt * 120,
         hrs=48,
@@ -163,9 +163,9 @@ rule meryl_combine:
     input:
         meryl=agg_reads,
     output:
-        meryl=directory("QC_results/merqury/meryl/{sample}/{sample}_all.meryl"),
+        meryl=directory("merqury/meryl/{sample}/{sample}_all.meryl"),
     resources:
-        mem=8,
+        mem=lambda wildcards, attempt: (2 ** (attempt-1)) * 128,
         hrs=48,
     threads: 1
     singularity:
@@ -185,17 +185,18 @@ rule merqury_script:
         meryl=find_meryl,
         hap_one=find_cleaned_hap_one,
     output:
-        run_script="QC_results/merqury/results/{asm}/{asm}_run.sh",
+        run_script="merqury/results/{asm}/{asm}_run.sh",
     params:
         hap_two=find_cleaned_hap_two,
+        unassigned_contig=find_unassigned_contig,
     resources:
-        mem=4,
+        mem=lambda wildcards, attempt: (2 ** (attempt-1)) * 4,
         hrs=2,
     threads: 1
     run:
         meryl_abs = os.path.abspath(input.meryl)
         hap_one_abs = os.path.abspath(input.hap_one)
-        if params.hap_two.upper() == "NA":
+        if (params.hap_two.upper() == "NA") or (not os.path.isfile(params.hap_two)):
             asm_all = [hap_one_abs]
         else:
             asm_all = [hap_one_abs, os.path.abspath(params.hap_two)]
@@ -203,6 +204,9 @@ rule merqury_script:
         with open(output.run_script, "w") as outfile:
             outfile.write("#!/usr/bin/env bash \n")
             outfile.write(f"merqury.sh {meryl_abs} {asm_all} {wildcards.asm}\n")
+            if os.path.isfile(params.unassigned_contig):
+                unassigned_abs = os.path.abspath(params.unassigned_contig)
+                outfile.write(f"merqury.sh {meryl_abs} {unassigned_abs} {wildcards.asm}_unassigned\n")
         os.chmod(output.run_script, 0o755)
 
 
@@ -210,16 +214,16 @@ rule merqury_run:
     input:
         run_script=rules.merqury_script.output.run_script,
     output:
-        png="QC_results/merqury/results/{asm}/{asm}.qv",
+        png="merqury/results/{asm}/{asm}.qv",
     resources:
-        mem=4,
+        mem=lambda wildcards, attempt: (2 ** (attempt-1)) * 4,
         hrs=96,
     threads: 16
     singularity:
         "docker://eichlerlab/merqury:1.3.1"
     shell:
         """
-        pushd QC_results/merqury/results/{wildcards.asm}/; ./$( basename {input.run_script} ); popd
+        pushd merqury/results/{wildcards.asm}/; ./$( basename {input.run_script} ); popd
         """
 
 
@@ -229,9 +233,9 @@ rule hapmers:
         pat_meryl=find_pat_meryl,
         asm_meryl=rules.meryl_combine.output.meryl,
     output:
-        inherited_hist="QC_results/merqury/meryl/{sample}/hapmers/inherited_hapmers.hist",
+        inherited_hist="merqury/meryl/{sample}/hapmers/inherited_hapmers.hist",
     resources:
-        mem=4,
+        mem=lambda wildcards, attempt: (2 ** (attempt-1)) * 4,
         hrs=96,
     threads: 8
     singularity:
@@ -248,7 +252,7 @@ rule agg_hapmers:
     input:
         find_hapmer_hist,
     output:
-        hflag=touch(temp("QC_results/merqury/results/{asm}/trio/.hapmers_done")),
+        hflag=touch(temp("merqury/results/{asm}/trio/.hapmers_done")),
 
 
 rule merqury_trio_script:
@@ -258,11 +262,11 @@ rule merqury_trio_script:
         hap_one=find_cleaned_hap_one,
         hap_two=find_cleaned_hap_two,
     output:
-        run_script="QC_results/merqury/results/{asm}/trio/{asm}_run.sh",
+        run_script="merqury/results/{asm}/trio/{asm}_run.sh",
     params:
         meryl_hapmers=find_hapmers,
     resources:
-        mem=4,
+        mem=lambda wildcards, attempt: (2 ** (attempt-1)) * 4,
         hrs=2,
     threads: 1
     run:
@@ -281,14 +285,14 @@ rule merqury_trio_run:
     input:
         run_script=rules.merqury_trio_script.output.run_script,
     output:
-        png="QC_results/merqury/results/{asm}/trio/{asm}_trio.spectra-asm.st.png",
+        png="merqury/results/{asm}/trio/{asm}_trio.spectra-asm.st.png",
     resources:
-        mem=4,
+        mem=lambda wildcards, attempt: (2 ** (attempt-1)) * 4,
         hrs=96,
     threads: 16
     singularity:
         "docker://eichlerlab/merqury:1.3.1"
     shell:
         """
-        pushd QC_results/merqury/results/{wildcards.asm}/trio; ./$( basename {input.run_script} ); popd
+        pushd merqury/results/{wildcards.asm}/trio; ./$( basename {input.run_script} ); popd
         """

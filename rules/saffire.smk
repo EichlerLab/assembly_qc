@@ -12,96 +12,108 @@ PARTS=config.get('PARTS', 30)
 MINIMAP_PARAMS = config.get('MINIMAP_PARAMS', '-x asm20 -m 10000 -z 10000,50 -r 50000 --end-bonus=100 -O 5,56 -E 4,1 -B 5')
 MANIFEST = config.get('MANIFEST', 'config/manifest.tab')
 SV_SIZE = config.get('SV_SIZE', '30000')
-GENOME_INDEX = "/net/eichler/vol28/eee_shared/assemblies/CHM13/T2T/v2.0/chrom_index.txt"
-REF = config.get('REF')
-REF_NAME = REF.split('/')[-1].split('.fa')[0]
+
+REF_DICT = config["REF"]
 ALIGNER = config.get('ALIGNER',"minimap2")
 
 
+raw_manifest_df = pd.read_csv(MANIFEST, sep='\t')
+
 ## Universial conversion of manifest df
-manifest_df = pd.read_csv(MANIFEST, sep='\t')
 
-if ("H1" in manifest_df.columns) and ("H2" in manifest_df):
-    df_transform = list()
-    for idx, row in manifest_df.iterrows():
-        df_transform.append({"SAMPLE": "%s_hap1"%row["SAMPLE"], "ASM":row["H1"]})
-        df_transform.append({"SAMPLE": "%s_hap2"%row["SAMPLE"], "ASM":row["H2"]})
+add_haps = {"H2":"hap2", "UNASSIGNED":"unassigned"}
+df_transform = list()
+for idx, row in raw_manifest_df.iterrows():
+    df_transform.append({"SAMPLE": f"%s_hap1"%row["SAMPLE"], "ASM":row["H1"]}) # required
 
-    manifest_df = pd.DataFrame(df_transform)
-
+    for add_hap in add_haps:
+        if (add_hap in raw_manifest_df.columns) and (not pd.isna(row[add_hap])):
+            df_transform.append({"SAMPLE": f"%s_%s"%(row["SAMPLE"], add_haps[add_hap]), "ASM": row[add_hap]})
+        
+manifest_df = pd.DataFrame(df_transform)
 manifest_df.set_index("SAMPLE",inplace=True)
+
+#-----------------------------------------
+
 
 scattergather:
     split=PARTS
 
 wildcard_constraints:
     sample='|'.join(manifest_df.index),
+    alinger='minimap2',
 
+
+def find_ref_fa(wildcards):
+    return REF_DICT[wildcards.ref]["PATH"]
 
 def find_fasta(wildcards):
-    return f"QC_results/contamination_screening/results/{wildcards.sample}/fasta/{wildcards.sample}.fasta"
+    return f"fcs_cleaned_fasta/{wildcards.sample}/{wildcards.sample}.fasta"
 
 def find_fasta_index(wildcards):
-    return f"QC_results/contamination_screening/results/{wildcards.sample}/fasta/{wildcards.sample}.fasta.fai"
+    return f"fcs_cleaned_fasta/{wildcards.sample}/{wildcards.sample}.fasta.fai"
 
 def find_contigs(wildcards):
-    return gather.split('QC_results/saffire/tmp/{sample}.{aligner}.{scatteritem}.broken.paf', sample=wildcards.sample, aligner=ALIGNER)
+    return gather.split('saffire/{ref}/tmp/{sample}.{aligner}.{scatteritem}.broken.paf', ref=wildcards.ref, sample=wildcards.sample, aligner=wildcards.aligner)
 
-def find_scatter_sams(wildcards):
-    return gather.split("QC_results/saffire/tmp/{sample}.winnowmap.{scatteritem}.sam", sample=wildcards.sample)
+def find_all_paf(wildcards):
+    avail_pafs = []
+    haps = ["hap1","hap2","unassigned"]
+    values = raw_manifest_df.loc[raw_manifest_df["SAMPLE"] == wildcards.asm][["H1","H2","UNASSIGNED"]].iloc[0].tolist()
+    for idx, hap in enumerate(haps):
+        if not str(values[idx]) == "nan":
+            avail_pafs.append (f'saffire/{wildcards.ref}/results/{wildcards.asm}_{hap}/alignments/{wildcards.asm}_{hap}.{wildcards.aligner}.paf')
+    return avail_pafs
 
-
-
-localrules: 
-    all,
-
-rule all:
+checkpoint copy_ref_fasta:
     input:
-        expand("QC_results/saffire/results/{sample}/{sample}.{aligner}.saf", sample=manifest_df.index, aligner=ALIGNER)
-
-rule gather_bams:
-    input:
-        expand("QC_results/saffire/results/{sample}/alignments/{sample}.{aligner}.bam", sample=manifest_df.index, aligner=ALIGNER)
-
-rule gather_beds:
-    input:
-        expand("QC_results/saffire/results/{sample}/beds/{sample}.{aligner}.bed", sample=manifest_df.index, aligner=ALIGNER)
-
-rule gather_pafs:
-    input:
-        expand("QC_results/saffire/results/{sample}/alignments/{sample}.{aligner}.paf", sample=manifest_df.index, aligner=ALIGNER)
+        raw_ref=lambda wildcards: config["REF"][wildcards.ref]["PATH"],
+    output:
+        ref = "saffire/{ref}/reference/{ref}.fa",
+        fai = "saffire/{ref}/reference/{ref}.fa.fai",
+        genome_index = "saffire/{ref}/reference/{ref}.genome.txt"
+    threads: 1,
+    resources:
+        mem = 4,
+        hrs = 1,
+    shell:
+        """
+        cp {input.raw_ref} {output.ref}
+        samtools faidx {output.ref}
+        cut -f1 {output.fai}> {output.genome_index}
+        """
 
 rule get_meryl_db:
     input:
-        ref=REF
+        ref="saffire/{ref}/reference/{ref}.fa",
     output:
-        meryl_db_name = directory(f"QC_results/saffire/merylDB/{REF_NAME}"),
+        meryl_db_name = directory("saffire/{ref}/merylDB/{ref}"),
     threads: 1
     singularity:
-        "docker://eichlerlab/merqury/1.3.1"
-    resources: 
+        "docker://eichlerlab/merqury:1.3.1"
+    resources:
         mem = 16,
         hrs = 72
     shell:
         '''
         meryl count k=19 output {output.meryl_db_name} {input.ref}
-        '''    
+        '''
 
 rule get_kmer_count:
     input:
         meryl_db_name = rules.get_meryl_db.output.meryl_db_name
     output:
-        kmer_count = f"QC_results/saffire/merylDB/repetitive_k19_{REF_NAME}.txt"
+        kmer_count = "saffire/{ref}/merylDB/repetitive_k19_{ref}.txt"
     threads: 1
     singularity:
-        "docker://eichlerlab/merqury/1.3.1"
-    resources: 
+        "docker://eichlerlab/merqury:1.3.1"
+    resources:
         mem = 8,
         hrs = 72
     shell:
         '''
         meryl print greater-than distinct=0.9998 {input.meryl_db_name} > {output.kmer_count}
-        '''    
+        '''
 
 rule get_batch_ids:
     input:
@@ -109,7 +121,7 @@ rule get_batch_ids:
     output:
         batches=temp(
             scatter.split(
-                "QC_results/saffire/tmp/{{sample}}.{scatteritem}.batch",
+                "saffire/tmp/{{sample}}.{scatteritem}.batch",
             )
         ),
     resources:
@@ -141,10 +153,10 @@ rule get_batch_ids:
 rule split_fasta:
     input:
         fasta=find_fasta,
-        batch_file="QC_results/saffire/tmp/{sample}.{scatteritem}.batch",
+        batch_file="saffire/tmp/{sample}.{scatteritem}.batch",
     output:
         scatter_fasta=temp(
-            "QC_results/saffire/tmp/{sample}.{scatteritem}.fasta"
+            "saffire/tmp/{sample}.{scatteritem}.fasta"
         ),
     resources:
         mem=4,
@@ -155,107 +167,22 @@ rule split_fasta:
         "docker://eichlerlab/binf-basics:0.1"
     shell:
         """
-        samtools faidx {input.fasta} -r {input.batch_file} > {output.scatter_fasta}        
+        samtools faidx {input.fasta} -r {input.batch_file} > {output.scatter_fasta}
         """
-
-
-rule make_winnowmap_scatter_paf:
-    input:
-        ref = REF,
-        kmer_count = rules.get_kmer_count.output.kmer_count,
-        fa = "QC_results/saffire/tmp/{sample}.{scatteritem}.fasta"
-    output:
-        scatter_paf=temp(
-            "QC_results/saffire/tmp/{sample}.winnowmap.{scatteritem}.aln.paf"
-        ),
-    benchmark: "QC_results/saffire/benchmarks/{sample}.winnowmap_paf.{scatteritem}.benchmark.txt",
-    resources:
-        mem=lambda wildcards, attempt: max(attempt * 2, 16),
-        hrs=168,
-        disk_free=5,
-    params:
-        map_opts = MINIMAP_PARAMS,
-    singularity:
-        "docker://eichlerlab/align-basics:0.1"
-    threads: 12,
-    shell:
-        """
-        winnowmap -W {input.kmer_count} -c -t {threads} -K {resources.mem}G --cs {params.map_opts} --secondary=no --eqx -Y {input.ref} {input.fa} > {output.scatter_paf}
-        """
-
-
-rule make_winnowmap_scatter_sam:
-    input:
-        ref = REF,
-        kmer_count = rules.get_kmer_count.output.kmer_count,
-        fa = "QC_results/saffire/tmp/{sample}.{scatteritem}.fasta"
-    output:
-        scatter_sam=temp(
-            "QC_results/saffire/tmp/{sample}.winnowmap.{scatteritem}.sam"
-        ),
-    benchmark: "QC_results/saffire/benchmarks/{sample}.winnowmap_sam.{scatteritem}.benchmark.txt",        
-    resources:
-        mem=lambda wildcards, attempt: max(attempt * 2, 16),
-        hrs=168,
-        disk_free=5,
-    params:
-        map_opts = MINIMAP_PARAMS,
-    singularity:
-        "docker://eichlerlab/align-basics:0.1"
-    threads: 8
-    shell:
-        """
-        winnowmap -W {input.kmer_count} -c -t {threads} -K {resources.mem}G --cs -a {params.map_opts} --MD --secondary=no --eqx -Y {input.ref} {input.fa} > {output.scatter_sam}
-        """
-
-rule combine_winnowmap_scatter_sam:
-    input:
-        scatter_sams=find_scatter_sams,
-    output:
-        bam="QC_results/saffire/results/{sample}/alignments/{sample}.winnowmap.bam",
-    resources:
-        mem=12,
-        hrs=48,
-        disk_free=5,
-    singularity:
-        "docker://eichlerlab/binf-basics:0.1"
-    threads: 8
-    shell:
-        """
-        awk '!seen[$0]++' {input.scatter_sams} | samtools view -bS - | samtools sort -@ {threads} - > {output.bam}
-        """
-
-rule combine_winnowmap_paf:
-    input:
-        scatter_pafs=gather.split(
-            "QC_results/saffire/tmp/{sample}.winnowmap.{scatteritem}.aln.paf",
-            sample=manifest_df.index
-        ),
-    output:
-        paf="QC_results/saffire/results/{sample}/alignments/{sample}.winnowmap.paf"
-    resources:
-        mem=8,
-        hrs=12,
-        disk_free=1,
-    threads: 1
-    shell:
-        """
-        awk '!seen[$0]++' {input.scatter_pafs} > {output.paf}
-        """	
 
 rule make_minimap_paf:
     input:
         fa = find_fasta,
-        ref = REF
+        ref = find_ref_fa
     output:
-        paf = "QC_results/saffire/results/{sample}/alignments/{sample}.minimap2.paf",
-    benchmark: "QC_results/saffire/benchmarks/{sample}.minimap2_paf.benchmark.txt",
+        paf = "saffire/{ref}/results/{sample}/alignments/{sample}.minimap2.paf",
+    benchmark: "saffire/{ref}/benchmarks/{sample}.minimap2_paf.benchmark.txt",
     threads: 8
     params:
         map_opts = MINIMAP_PARAMS,
     singularity:
         "docker://eichlerlab/align-basics:0.1"
-    resources: 
+    resources:
         mem = 12,
         hrs = 120
     shell:
@@ -266,49 +193,48 @@ rule make_minimap_paf:
 rule make_minimap_bam:
     input:
         fa = find_fasta,
-        ref = REF
+        ref = find_ref_fa
     output:
-        bam = "QC_results/saffire/results/{sample}/alignments/{sample}.minimap2.bam"
-    benchmark: "QC_results/saffire/benchmarks/{sample}.minimap2_bam.benchmark.txt",
+        bam = "saffire/{ref}/results/{sample}/alignments/{sample}.minimap2.bam"
+    benchmark: "saffire/{ref}/benchmarks/{sample}.minimap2_bam.benchmark.txt",
     threads: 8
     params:
         map_opts = MINIMAP_PARAMS,
     singularity:
         "docker://eichlerlab/align-basics:0.1"
-    resources: 
+    resources:
         mem = 60,
         hrs = 120
     shell:
         '''
-        minimap2 -c -t {threads} -K {resources.mem}G --cs -a {params.map_opts} --MD --secondary=no --eqx -Y {input.ref} {input.fa} | samtools view -S -b /dev/stdin | samtools sort -@ {threads} /dev/stdin > {output.bam}
+        minimap2 -c -t {threads} -K {resources.mem}G --cs -a {params.map_opts} --MD --secondary=no --eqx -Y {input.ref} {input.fa} | samtools view -S -b /dev/stdin | samtools sort -@ {threads} -o {output.bam}
         '''
 
 rule make_bed:
     input:
-        paf = "QC_results/saffire/results/{sample}/alignments/{sample}.{aligner}.paf",
+        paf = "saffire/{ref}/results/{sample}/alignments/{sample}.{aligner}.paf",
+        genome_index = "saffire/{ref}/reference/{ref}.genome.txt"
     output:
-        bed = "QC_results/saffire/results/{sample}/beds/{sample}.{aligner}.bed",
-    params:
-        genome_index = GENOME_INDEX
+        bed = "saffire/{ref}/results/{sample}/beds/{sample}.{aligner}.bed",
     threads: 1
     singularity:
         "docker://eichlerlab/align-basics:0.1"
-    resources: 
+    resources:
         mem = 12,
         hrs = 1
     shell:
         '''
-        awk -vOFS="\t" '{{print $6,$8,$9,$1,$12}}' {input.paf} | bedtools sort -g {params.genome_index} -i - > {output.bed}
+        awk -vOFS="\t" '{{print $6,$8,$9,$1,$12}}' {input.paf} | bedtools sort -g {input.genome_index} > {output.bed}
         '''
 
 rule split_paf:
     input:
-        paf = "QC_results/saffire/results/{sample}/alignments/{sample}.{aligner}.paf",
+        paf = "saffire/{ref}/results/{sample}/alignments/{sample}.{aligner}.paf",
     output:
-        flag = temp(scatter.split("QC_results/saffire/tmp/{{sample}}.{{aligner}}.{scatteritem}.paf")),
-        temp_paf = temp('QC_results/saffire/tmp/{sample}_uniform.{aligner}.paf')
+        flag = temp(scatter.split("saffire/{{ref}}/tmp/{{sample}}.{{aligner}}.{scatteritem}.paf")),
+        temp_paf = temp("saffire/{ref}/tmp/{sample}_uniform.{aligner}.paf")
     threads: 1
-    resources: 
+    resources:
         mem = 8,
         hrs = 24
     run:
@@ -324,33 +250,48 @@ rule split_paf:
         with open(input.paf, 'r') as infile:
             for line in infile:
                 out_list.append(line.split('\t')[0:12]+[x for x in line.split('\t')[12:] if x.split(':')[0] in all_tags])
-        
+
         with open(output.temp_paf, 'w') as outfile:
             for item in out_list:
                 outfile.write('\t'.join(item))
-            
+
         df = pd.read_csv(output.temp_paf, sep='\t', low_memory=False, header=None)
         col_out = df.columns.values
         for i, contig in enumerate(df[0].unique()):
-            out_num = (i % PARTS) + 1 
-            df.loc[df[0] == contig][col_out].to_csv(f'QC_results/saffire/tmp/{wildcards.sample}.{ALIGNER}.{out_num}-of-{PARTS}.paf', sep='\t', index=False, header=False, mode='a+')
+            out_num = (i % PARTS) + 1
+            df.loc[df[0] == contig][col_out].to_csv(f'saffire/tmp/{wildcards.sample}.{ALIGNER}.{out_num}-of-{PARTS}.paf', sep='\t', index=False, header=False, mode='a+')
 
 rule trim_break_orient_paf:
     input:
-        paf = 'QC_results/saffire/tmp/{sample}.{aligner}.{scatteritem}.paf'
+        paf = 'saffire/{ref}/tmp/{sample}.{aligner}.{scatteritem}.paf'
     output:
-        contig = temp('QC_results/saffire/tmp/{sample}.{aligner}.{scatteritem}.orient.paf'),
-        broken = temp('QC_results/saffire/tmp/{sample}.{aligner}.{scatteritem}.broken.paf')
+        contig = temp('saffire/{ref}/tmp/{sample}.{aligner}.{scatteritem}.orient.paf'),
+        broken = temp('saffire/{ref}/tmp/{sample}.{aligner}.{scatteritem}.broken.paf')
     threads: 1
+    params:
+        sv_size = SV_SIZE,
     singularity:
         "docker://eichlerlab/rustybam:0.1.33"
-    resources: 
+    resources:
         mem = 24,
         hrs = 24
     shell:
         '''
         rustybam orient {input.paf} | rustybam trim-paf | rb filter --paired-len 1000000 > {output.contig}
-        rustybam break-paf --max-size {SV_SIZE} {output.contig} > {output.broken}
+        rustybam break-paf --max-size {params.sv_size} {output.contig} > {output.broken}
+        '''
+rule concat_pafs:
+    input:
+        paf = find_all_paf
+    output:
+        paf = 'saffire/{ref}/results/merged_paf/{aligner}/{asm}.concat.paf'
+    threads:1 
+    resources:
+        mem=4,
+        hrs=1
+    shell:
+        '''
+        cat {input.paf} > {output.paf}
         '''
 
 rule combine_paf:
@@ -358,21 +299,21 @@ rule combine_paf:
         paf = find_contigs,
         flag = rules.split_paf.output.flag
     output:
-        paf = 'QC_results/saffire/tmp/{sample}.{aligner}.broken.paf'
+        paf = 'saffire/{ref}/tmp/{sample}.{aligner}.broken.paf'
     threads: 1
-    resources: 
+    resources:
         mem = 8,
         hrs = 24
     shell:
         '''
-        cat {input.paf} > {output.paf} 
+        cat {input.paf} > {output.paf}
         '''
 
 rule saff_out:
     input:
         paf = rules.combine_paf.output.paf
     output:
-        saf = 'QC_results/saffire/results/{sample}/{sample}.{aligner}.saf'
+        saf = 'saffire/{ref}/results/{sample}/saff/{sample}.{aligner}.saf'
     threads: 1
     singularity:
         "docker://eichlerlab/rustybam:0.1.33"
@@ -383,4 +324,3 @@ rule saff_out:
         '''
         rb stats --paf {input.paf} > {output.saf}
         '''
-

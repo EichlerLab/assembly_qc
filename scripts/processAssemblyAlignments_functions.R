@@ -35,8 +35,10 @@ paf2ranges <- function(paf.file=NULL, index=NULL, min.mapq=10, min.aln.width=100
     ptm <- startTimedMessage("\nLoading PAF file: ", paf.file)
 #    paf <- utils::read.table(paf.file, stringsAsFactors = FALSE, comment.char = '&')
     paf <- utils::read.table(paf.file, fill=TRUE, stringsAsFactors = FALSE, comment.char = '&', header=FALSE) # rows of paf file have 24 columns or 25 columns.
+    
     ## Keep only first 12 columns
     paf <- paf[,c(1:12)]
+    paf <- na.omit(paf) ## discard row with NA
     ## Add header
     header <- c('q.name', 'q.len', 'q.start', 'q.end', 'strand', 't.name', 't.len', 't.start', 't.end', 'n.match', 'aln.len', 'mapq') 
     colnames(paf) <- header
@@ -60,6 +62,9 @@ paf2ranges <- function(paf.file=NULL, index=NULL, min.mapq=10, min.aln.width=100
   names(paf.gr) <- NULL
   #paf.gr$target.gr <- GenomicRanges::GRanges(seqnames=paf$t.name, ranges=IRanges::IRanges(start=paf$t.start, end=paf$t.end), 'q.name'= paf$q.name)
   paf.gr$query.gr <- GenomicRanges::GRanges(seqnames=paf$q.name, ranges=IRanges::IRanges(start=paf$q.start, end=paf$q.end), 't.name'= paf$t.name)
+  ## Keep only seqname that do not contain "_"
+  paf.gr$query.gr <- paf.gr$query.gr[!grepl("_", seqnames(paf.gr$query.gr))]
+
   ## Add index if defined
   if (!is.null(index) & is.character(index)) {
     paf.gr$ID <- index
@@ -534,7 +539,6 @@ asm2referenceCoverage <- function(h1.paf = NULL, h2.paf = NULL, min.mapq = 0, mi
                       , min.aln.width = min.aln.width
                       , min.ctg.size = min.ctg.size
                       , report.ctg.ends = FALSE)
-  
   gr <- suppressWarnings( c(h1.gr$ctg.aln, h2.gr$ctg.aln) )
   ## Calculate coverage
   gr.cov <- as( coverage(gr), 'GRanges')

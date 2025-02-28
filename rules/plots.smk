@@ -7,20 +7,38 @@ configfile: 'config/config_asm_qc.yaml'
 MANIFEST = config.get('MANIFEST', 'config/manifest_asm_qc.tab')
 
 SNAKEMAKE_DIR = os.path.dirname(workflow.snakefile)
-IDEO_PLOT_SCRIPT = "/net/eichler/vol28/7200/software/pipelines/compteam_tools/ideo_plot.py"
+
 N50_SCRIPT = "/net/eichler/vol28/7200/software/pipelines/compteam_tools/n50"
-PLOIDY_PLOT_SCRIPT = f"{SNAKEMAKE_DIR}/../scripts/ploidy.R"
 ALIGNER = config.get('ALIGNER',"minimap2")
 
 
 def find_fasta(wildcards):
-    return f"QC_results/contamination_screening/results/{wildcards.sample}/fasta/{wildcards.sample}.fasta"
+    return f"fcs_cleaned_fasta/{wildcards.sample}/{wildcards.sample}.fasta"
+
+def find_contig_fasta(wildcards):
+    return f"fcs_cleaned_fasta/{wildcards.sample}/contig_fasta/{wildcards.sample}.fasta"
+
+
+def find_all_bed_set(wildcards):
+    haplotype_set = [f"{wildcards.asm}_hap1"]
+    if not pd.isna(full_manifest_df.at[wildcards.asm, "H2"]):
+        haplotype_set.append(f"{wildcards.asm}_hap2")        
+    all_bed_set = [f"saffire/{wildcards.ref}/results/{sample}/beds/{sample}.{wildcards.aligner}.bed" for sample in haplotype_set]
+    return all_bed_set
+
 
 def get_asm_manifest_df(manifest_df):
+
+    ## Universial conversion of manifest df
+
+    add_haps = {"H2":"hap2", "UNASSIGNED":"unassigned"}
     df_transform = list()
     for idx, row in manifest_df.iterrows():
-        df_transform.append({"SAMPLE": "%s_hap1"%row["SAMPLE"], "ASM":row["H1"]})
-        df_transform.append({"SAMPLE": "%s_hap2"%row["SAMPLE"], "ASM":row["H2"]})
+        df_transform.append({"SAMPLE": f"%s_hap1"%row["SAMPLE"], "ASM":row["H1"]}) # required
+
+        for add_hap in add_haps:
+            if (add_hap in manifest_df.columns) and (not pd.isna(row[add_hap])):
+                df_transform.append({"SAMPLE": f"%s_%s"%(row["SAMPLE"], add_haps[add_hap]), "ASM": row[add_hap]})
 
     return pd.DataFrame(df_transform)
 
@@ -31,23 +49,12 @@ full_manifest_df.set_index("SAMPLE",inplace=True) ## manifest df for merqury
 conv_manifest_df.set_index("SAMPLE",inplace=True) ## shortened df using only SAMPLE / ASM fields
 
 
-rule gather_plots:
-    input:
-        expand("QC_results/contig_stats/n50/{sample}.n50.stats", sample = conv_manifest_df.index),
-        expand("QC_results/contig_stats/plots/{sample}.dist.log.png", sample = conv_manifest_df.index),
-        expand("QC_results/contig_stats/plots/{sample}.scatter.log.png", sample = conv_manifest_df.index),
-        expand("QC_results/ideo_plots/{aligner}/{asm}.ideoplot.pdf", asm = full_manifest_df.index, aligner = ALIGNER),
-        expand("QC_results/ploidy_plots/{aligner}/{asm}.summary.txt", asm = full_manifest_df.index, aligner = ALIGNER),
-
-
-rule make_contig_stats:
+rule get_contig_length_plot:
     input:
         asm_fasta = find_fasta,
     output:
-        n50_stats = "QC_results/contig_stats/n50/{sample}.n50.stats",
-        dist_plot = "QC_results/contig_stats/plots/{sample}.dist.log.png",
-        scatter_plot = "QC_results/contig_stats/plots/{sample}.scatter.log.png",
-        flag = "QC_results/contig_stats/{sample}.contig_stats.done"
+        dist_plot = "plots/contigs/{sample}.dist.log.png",
+        scatter_plot = "plots/contigs/{sample}.scatter.log.png",
     threads:
         1
     resources:
@@ -57,47 +64,46 @@ rule make_contig_stats:
         script_path = N50_SCRIPT
     shell:
         '''
-        {params.script_path} {input.asm_fasta} -p {output.scatter_plot} -d {output.dist_plot} -t {wildcards.sample} -l > {output.n50_stats}
-        touch {output.flag}
+        {params.script_path} {input.asm_fasta} -p {output.scatter_plot} -d {output.dist_plot} -t {wildcards.sample} -l -n
         '''
 
-rule make_ideo_plot:
+rule get_ideo_plot:
     input:
-        hap_one_bed = "QC_results/saffire/results/{asm}_hap1/beds/{asm}_hap1.{aligner}.bed",
-        hap_two_bed = "QC_results/saffire/results/{asm}_hap2/beds/{asm}_hap2.{aligner}.bed",
+        hap_beds = find_all_bed_set
     output:
-        pdf = "QC_results/ideo_plots/{aligner}/{asm}.ideoplot.pdf",
+        pdf = "plots/ideo/{aligner}/{asm}_to_{ref}.ideoplot.pdf",
     threads:
         1
     resources:
         mem = 8,
         hrs = 1,
     params:
-        script_path = IDEO_PLOT_SCRIPT,
-    shell:
-        '''
-        {params.script_path} --asm1 {input.hap_one_bed} --asm2 {input.hap_two_bed} -r chm13 -s {wildcards.asm} -o {output.pdf}
-        '''
+        ref = "{ref}",
+        path = lambda wildcards: config["REF"][wildcards.ref]["PATH"],
+        cyto = lambda wildcards: config["REF"][wildcards.ref].get("CYTO","Null"),
+        chroms = lambda wildcards: config["REF"][wildcards.ref]["CHROMS"],
+    singularity:
+        "docker://eichlerlab/ideoplot:0.1",
+    script:
+        f"{SNAKEMAKE_DIR}/../scripts/ideo_plot.py"
 
-rule make_ploidy_plot:
+rule get_ploidy_plot:
     input:
-        hap_one_paf = "QC_results/saffire/results/{asm}_hap1/alignments/{asm}_hap1.{aligner}.paf",
-        hap_two_paf = "QC_results/saffire/results/{asm}_hap2/alignments/{asm}_hap2.{aligner}.paf",
-
+        hap_one_paf = "saffire/{ref}/results/{asm}_hap1/alignments/{asm}_hap1.{aligner}.paf",
+        hap_two_paf = "saffire/{ref}/results/{asm}_hap2/alignments/{asm}_hap2.{aligner}.paf",
     output:
-        pdf = "QC_results/ploidy_plots/{aligner}/{asm}.ploidy.pdf",
-        summary = "QC_results/ploidy_plots/{aligner}/{asm}.summary.txt",
+        pdf = "plots/ploidy/{ref}/{aligner}/{asm}.ploidy.pdf",
+        summary = "plots/ploidy/{ref}/{aligner}/{asm}.summary.txt",
     threads:
         1
     resources:
         mem = 8,
         hrs = 4,
     params:
-        script_path = PLOIDY_PLOT_SCRIPT,
-        snakemake_dir = f"{SNAKEMAKE_DIR}/../scripts",
+        script_dir = f"{SNAKEMAKE_DIR}/../scripts",
     singularity:
         "docker://eichlerlab/binf-rplot:0.1"
     shell:
         '''
-        Rscript {params.script_path} {params.snakemake_dir} {wildcards.asm} {input.hap_one_paf} {input.hap_two_paf} {output.pdf} {output.summary}
+        Rscript {params.script_dir}/ploidy.R {params.script_dir} {wildcards.asm} {input.hap_one_paf} {input.hap_two_paf} {output.pdf} {output.summary}
         '''

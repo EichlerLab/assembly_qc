@@ -1,14 +1,20 @@
 ### general
 MANIFEST: config/manifest_asm_qc.tab
-REF: /net/eichler/vol28/eee_shared/assemblies/CHM13/T2T/v2.0/T2T-CHM13v2.fasta
+REF:
+  CHM13:
+    PATH: /net/eichler/vol28/eee_shared/assemblies/CHM13/T2T/v2.0/T2T-CHM13v2.fasta
+    CHROMS: /net/eichler/vol28/eee_shared/assemblies/CHM13/T2T/v2.0/genome.txt
+    CYTO: /net/eichler/vol28/eee_shared/assemblies/CHM13/T2T/v2.0/anno/cyto.bed ## Optional
+  GRCh38:
+    PATH: /net/eichler/vol28/eee_shared/assemblies/hg38/no_alt/hg38.no_alt.fa
+    CHROMS: /net/eichler/vol28/eee_shared/assemblies/hg38/no_alt/genome.txt
+    CYTO: /net/eichler/vol28/eee_shared/assemblies/hg38/no_alt/anno/cyto.bed ## Optional
 
-### saffire
-ALIGNER:
-  - minimap2
-#  - winnomap
+### ModDotPlot
+BED: config/moddot_regions.bed
 
 ### compleasm
-MB_DOWNLOADS: /net/eichler/vol28/software/modules-sw/compleasm/0.2.2/Linux/CentOS7/x86_64/compleasm_kit/mb_download/
+DB_PATH: /net/eichler/vol28/eee_shared/buscodb/
 LINEAGE: primates
 MODE: busco
 
