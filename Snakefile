@@ -237,3 +237,14 @@ rule get_qv:
 rule get_plots:
     input:
         get_plot_inputs()
+
+rule get_stats:
+    input:
+        expand(
+            "stats/seq_stats/{sample}.scaftig.stats",
+            sample=conv_manifest_df.index.values,
+        ),
+        expand(
+            "stats/seq_stats/{sample}.contig.stats",
+            sample=conv_manifest_df.index.values,
+        ),
