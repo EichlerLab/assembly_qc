@@ -68,7 +68,7 @@ def get_all_inputs():
             sample=conv_manifest_df.index.values,
         ),
         expand(
-            "plots/contigs/{sample}.scatter.log.png",
+            "plots/contigs/{sample}.contig.scatter.log.png",
             sample=conv_manifest_df.index.values,
         ),
         expand(
@@ -115,7 +115,7 @@ def get_plot_inputs():
             aligner=ALIGNER,
         ),
         expand(
-            "plots/contigs/{sample}.scatter.log.png",
+            "plots/contigs/{sample}.contig.scatter.log.png",
             sample=conv_manifest_df.index.values,
         ),
     ]

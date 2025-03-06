@@ -51,10 +51,15 @@ conv_manifest_df.set_index("SAMPLE",inplace=True) ## shortened df using only SAM
 
 rule get_contig_length_plot:
     input:
-        asm_fasta = find_fasta,
+        scaftig_asm_fasta = find_fasta,
+        contig_asm_fasta = find_contig_fasta
     output:
-        dist_plot = "plots/contigs/{sample}.dist.log.png",
-        scatter_plot = "plots/contigs/{sample}.scatter.log.png",
+        scaftig_dist_plot = "plots/contigs/{sample}.scaftig.dist.log.png",
+        scaftig_scatter_plot = "plots/contigs/{sample}.scaftig.scatter.log.png",
+        scaftig_n50 = "stats/seq_stats/{sample}.scaftig.n50",
+        contig_dist_plot = "plots/contigs/{sample}.contig.dist.log.png",
+        contig_scatter_plot = "plots/contigs/{sample}.contig.scatter.log.png",
+        contig_n50 = "stats/seq_stats/{sample}.contig.n50"
     threads:
         1
     resources:
@@ -64,7 +69,8 @@ rule get_contig_length_plot:
         script_path = N50_SCRIPT
     shell:
         '''
-        {params.script_path} {input.asm_fasta} -p {output.scatter_plot} -d {output.dist_plot} -t {wildcards.sample} -l -n
+        {params.script_path} {input.scaftig_asm_fasta} -p {output.scaftig_scatter_plot} -d {output.scaftig_dist_plot} -t {wildcards.sample} -l > {output.scaftig_n50}
+        {params.script_path} {input.contig_asm_fasta} -p {output.contig_scatter_plot} -d {output.contig_dist_plot} -t {wildcards.sample} -l > {output.contig_n50}
         '''
 
 rule get_ideo_plot:

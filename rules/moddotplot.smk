@@ -70,7 +70,7 @@ def get_all_flag(wildcards):
 
 rule summarize_moddot_results:
     input:
-        
+        get_all_flag
     output:
         tsv = "moddotplot/results/{sample}.generated_acros.tsv"
     resources:
@@ -177,8 +177,7 @@ rule group_tigs:
             qrylen_dict = {}
             with open(input.paf) as f:
                 for line in f:
-                    query, query_len, query_start, query_end, strand, target, target_len, target_start, target_end, num_matches, alignment_len = line.strip().split("\t")[
-                                                                                                                                                 :11]
+                    query, query_len, query_start, query_end, strand, target, target_len, target_start, target_end, num_matches, alignment_len = line.strip().split("\t")[:11]
                     qrylen_dict[query] = query_len
                     if int(alignment_len) < 200000:
                         continue
@@ -334,7 +333,7 @@ rule get_pq_fa:
     shell:
         """
         if [ -s {input.bed} ]; then
-            echo ">{wildcards.region}" > {output.fa}
+            echo ">{wildcards.region}-$(awk '{{print $1}}' {input.bed})" > {output.fa}
             bedtools getfasta -fi {input.hap} -bed {input.bed} | tail -n +2 >> {output.fa}
             samtools faidx {output.fa}
         else
