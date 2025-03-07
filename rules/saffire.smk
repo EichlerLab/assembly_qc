@@ -177,7 +177,7 @@ rule make_minimap_paf:
     output:
         paf = "saffire/{ref}/results/{sample}/alignments/{sample}.minimap2.paf",
     benchmark: "saffire/{ref}/benchmarks/{sample}.minimap2_paf.benchmark.txt",
-    threads: 8
+    threads: 12
     params:
         map_opts = MINIMAP_PARAMS,
     singularity:
@@ -197,7 +197,7 @@ rule make_minimap_bam:
     output:
         bam = "saffire/{ref}/results/{sample}/alignments/{sample}.minimap2.bam"
     benchmark: "saffire/{ref}/benchmarks/{sample}.minimap2_bam.benchmark.txt",
-    threads: 8
+    threads: 12
     params:
         map_opts = MINIMAP_PARAMS,
     singularity:
