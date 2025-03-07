@@ -88,8 +88,8 @@ rule summarize_moddot_results:
         for chrom in acros:
             region_name = bed_df[bed_df["chr"] == chrom].index[0]
             try:
-                pdf = glob.glob(f"{plot_dir}/{region_name}-*_FULL.pdf")[0]
-                called[0].append(os.path.basename(pdf).replace(f"{region_name}-","").replace("_FULL.pdf",""))
+                pdf = glob.glob(f"{plot_dir}/{region_name}_*_FULL.pdf")[0]
+                called[0].append(os.path.basename(pdf).replace(f"{region_name}_","").replace("_FULL.pdf",""))
             except IndexError:
                 called[0].append("NA")
         result_df = pd.DataFrame(called, columns = header)
@@ -339,7 +339,7 @@ rule get_pq_fa:
     shell:
         """
         if [ -s {input.bed} ]; then
-            echo ">{params.region_name}-$(awk '{{print $1}}' {input.bed})" > {output.fa}
+            echo ">{params.region_name}_$(awk '{{print $1}}' {input.bed})" > {output.fa}
             bedtools getfasta -fi {input.hap} -bed {input.bed} | tail -n +2 >> {output.fa}
             samtools faidx {output.fa}
         else
