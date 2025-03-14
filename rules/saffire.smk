@@ -203,7 +203,7 @@ rule make_minimap_bam:
     singularity:
         "docker://eichlerlab/align-basics:0.1"
     resources:
-        mem = 60,
+        mem = 12,
         hrs = 120
     shell:
         '''
@@ -259,7 +259,7 @@ rule split_paf:
         col_out = df.columns.values
         for i, contig in enumerate(df[0].unique()):
             out_num = (i % PARTS) + 1
-            df.loc[df[0] == contig][col_out].to_csv(f'saffire/tmp/{wildcards.sample}.{ALIGNER}.{out_num}-of-{PARTS}.paf', sep='\t', index=False, header=False, mode='a+')
+            df.loc[df[0] == contig][col_out].to_csv(f'saffire/{wildcards.ref}/tmp/{wildcards.sample}.{ALIGNER}.{out_num}-of-{PARTS}.paf', sep='\t', index=False, header=False, mode='a+')
 
 rule trim_break_orient_paf:
     input:
