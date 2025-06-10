@@ -12,7 +12,7 @@ BUSCO_DB_PATH = config.get("DB_DIR", "/net/eichler/vol28/eee_shared/buscodb/")
 
 SNAKEMAKE_DIR = os.path.dirname(workflow.snakefile)
 
-raw_manifest_df = pd.read_csv(MANIFEST, sep='\t')
+raw_manifest_df = pd.read_csv(MANIFEST, sep='\t', comment='#', na_values=["","NA","na","N/A"])
 
 ## Universial conversion of manifest df
 

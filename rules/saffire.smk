@@ -17,7 +17,7 @@ REF_DICT = config["REF"]
 ALIGNER = config.get('ALIGNER',"minimap2")
 
 
-raw_manifest_df = pd.read_csv(MANIFEST, sep='\t')
+raw_manifest_df = pd.read_csv(MANIFEST, sep='\t', comment='#', na_values=["","NA","na","N/A"])
 
 ## Universial conversion of manifest df
 
@@ -38,11 +38,6 @@ manifest_df.set_index("SAMPLE",inplace=True)
 
 scattergather:
     split=PARTS
-
-wildcard_constraints:
-    sample='|'.join(manifest_df.index),
-    alinger='minimap2',
-
 
 def find_ref_fa(wildcards):
     return REF_DICT[wildcards.ref]["PATH"]
@@ -176,6 +171,9 @@ rule make_minimap_paf:
         ref = find_ref_fa
     output:
         paf = "saffire/{ref}/results/{sample}/alignments/{sample}.minimap2.paf",
+    wildcard_constraints:
+        sample='|'.join(manifest_df.index),
+        ref='[A-Za-z0-9_-]+',
     benchmark: "saffire/{ref}/benchmarks/{sample}.minimap2_paf.benchmark.txt",
     threads: 12
     params:
@@ -195,7 +193,10 @@ rule make_minimap_bam:
         fa = find_fasta,
         ref = find_ref_fa
     output:
-        bam = "saffire/{ref}/results/{sample}/alignments/{sample}.minimap2.bam"
+        bam = "saffire/{ref}/results/{sample}/alignments/{sample}.minimap2.bam",
+    wildcard_constraints:
+        sample='|'.join(manifest_df.index),
+        ref='[A-Za-z0-9_-]+',        
     benchmark: "saffire/{ref}/benchmarks/{sample}.minimap2_bam.benchmark.txt",
     threads: 12
     params:
@@ -203,7 +204,7 @@ rule make_minimap_bam:
     singularity:
         "docker://eichlerlab/align-basics:0.1"
     resources:
-        mem = 60,
+        mem = 12,
         hrs = 120
     shell:
         '''
@@ -216,6 +217,9 @@ rule make_bed:
         genome_index = "saffire/{ref}/reference/{ref}.genome.txt"
     output:
         bed = "saffire/{ref}/results/{sample}/beds/{sample}.{aligner}.bed",
+    wildcard_constraints:
+        sample='|'.join(manifest_df.index),
+        ref='[A-Za-z0-9_-]+',              
     threads: 1
     singularity:
         "docker://eichlerlab/align-basics:0.1"
@@ -233,6 +237,9 @@ rule split_paf:
     output:
         flag = temp(scatter.split("saffire/{{ref}}/tmp/{{sample}}.{{aligner}}.{scatteritem}.paf")),
         temp_paf = temp("saffire/{ref}/tmp/{sample}_uniform.{aligner}.paf")
+    wildcard_constraints:
+        sample='|'.join(manifest_df.index),
+        ref='[A-Za-z0-9_-]+',             
     threads: 1
     resources:
         mem = 8,
@@ -267,6 +274,9 @@ rule trim_break_orient_paf:
     output:
         contig = temp('saffire/{ref}/tmp/{sample}.{aligner}.{scatteritem}.orient.paf'),
         broken = temp('saffire/{ref}/tmp/{sample}.{aligner}.{scatteritem}.broken.paf')
+    wildcard_constraints:
+        sample='|'.join(manifest_df.index),
+        ref='[A-Za-z0-9_-]+',             
     threads: 1
     params:
         sv_size = SV_SIZE,
@@ -285,6 +295,9 @@ rule concat_pafs:
         paf = find_all_paf
     output:
         paf = 'saffire/{ref}/results/merged_paf/{aligner}/{asm}.concat.paf'
+    wildcard_constraints:
+        sample='|'.join(manifest_df.index),
+        ref='[A-Za-z0-9_-]+',             
     threads:1 
     resources:
         mem=4,
@@ -300,6 +313,9 @@ rule combine_paf:
         flag = rules.split_paf.output.flag
     output:
         paf = 'saffire/{ref}/tmp/{sample}.{aligner}.broken.paf'
+    wildcard_constraints:
+        sample='|'.join(manifest_df.index),
+        ref='[A-Za-z0-9_-]+',             
     threads: 1
     resources:
         mem = 8,
@@ -314,6 +330,9 @@ rule saff_out:
         paf = rules.combine_paf.output.paf
     output:
         saf = 'saffire/{ref}/results/{sample}/saff/{sample}.{aligner}.saf'
+    wildcard_constraints:
+        sample='|'.join(manifest_df.index),
+        ref='[A-Za-z0-9_-]+',             
     threads: 1
     singularity:
         "docker://eichlerlab/rustybam:0.1.33"

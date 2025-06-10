@@ -16,7 +16,7 @@ SOURCE_DIR = "/net/eichler/vol28/7200/software/pipelines/foreign_contamination_s
 MITO_DB = config.get("mito", f"{SOURCE_DIR}/db/mito_ebv.fa")
 RDNA_DB = config.get("rdna", f"{SOURCE_DIR}/db/rdna.fa")
 
-raw_manifest_df = pd.read_csv(MANIFEST, sep='\t')
+raw_manifest_df = pd.read_csv(MANIFEST, sep='\t', comment='#', na_values=["","NA","na","N/A"])
 
 ## Universial conversion of manifest df
 

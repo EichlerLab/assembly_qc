@@ -13,7 +13,7 @@ configfile: 'config/config_asm_qc.yaml'
 
 MANIFEST = config.get('MANIFEST', 'config/manifest.tab')
 
-raw_manifest_df = pd.read_csv(MANIFEST, sep='\t')
+raw_manifest_df = pd.read_csv(MANIFEST, sep='\t', comment='#', na_values=["","NA","na","N/A"])
 
 ## Universial conversion of manifest df
 
