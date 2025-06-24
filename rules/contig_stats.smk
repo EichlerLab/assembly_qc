@@ -12,7 +12,7 @@ MANIFEST = config.get('MANIFEST', 'config/manifest_asm_qc.tab')
 SNAKEMAKE_ROOT_DIR = os.path.dirname(workflow.snakefile).replace("/rules","")
 
 
-raw_manifest_df = pd.read_csv(MANIFEST, sep='\t')
+raw_manifest_df = pd.read_csv(MANIFEST, sep='\t', comment='#', na_values=["","NA","na","N/A"])
 
 ## Universial conversion of manifest df
 

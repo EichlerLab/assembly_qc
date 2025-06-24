@@ -31,7 +31,7 @@ def get_asm_manifest_df(manifest_df):
 
     return pd.DataFrame(df_transform)
 
-full_manifest_df = pd.read_csv(MANIFEST, header=0, sep='\t', comment='#')
+full_manifest_df = pd.read_csv(MANIFEST, header=0, sep='\t', comment='#', na_values=["","NA","na","N/A"])
 conv_manifest_df = get_asm_manifest_df(full_manifest_df)
 
 full_manifest_df.set_index("SAMPLE",inplace=True) ## manifest df for merqury
@@ -57,6 +57,12 @@ def get_all_inputs():
             sample=conv_manifest_df.index.values,
             aligner=ALIGNER,
         ),
+	expand(
+            "saffire/{ref}/results/{sample}/alignments/{sample}.{aligner}.bam",
+            ref=REF_DICT,
+            sample=conv_manifest_df.index.values,
+            aligner=ALIGNER,
+        ),  
         expand(
             "saffire/{ref}/results/{sample}/beds/{sample}.{aligner}.bed",
             ref=REF_DICT,
