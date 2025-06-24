@@ -7,6 +7,7 @@ from Bio import SeqIO
 from Bio.SeqIO.FastaIO import FastaWriter
 import pysam
 import numpy as np
+import re
 
 configfile: "config/config_asm_qc.yaml"
 MANIFEST = config.get('MANIFEST', 'config/manifest_asm_qc.tab')
@@ -463,7 +464,8 @@ rule rename_fasta:
 
         for record in cleaned_fasta_records:
             seq_name = str(record.id)
-            original_seq_name = seq_name.split(":")[0]
+            #original_seq_name = seq_name.split(":")[0]
+            original_seq_name = re.sub(r":[^:]+?$", "", seq_name)
             cleaned_sequence = str(record.seq)
             raw_sequence = original_fasta.fetch(original_seq_name)
             if cleaned_sequence == raw_sequence:
