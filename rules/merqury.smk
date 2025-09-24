@@ -13,8 +13,8 @@ MANIFEST = config.get('MANIFEST', 'config/manifest_asm_qc.tab')
 
 
 manifest_df = pd.read_csv(
-    MANIFEST, header=0, index_col="SAMPLE", sep="\t", comment="#"
-).fillna("NA")
+    MANIFEST, header=0, index_col="SAMPLE", sep="\t", comment="#", na_values=["","NA","na","N/A"]
+)
 
 
 

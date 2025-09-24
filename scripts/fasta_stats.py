@@ -13,9 +13,10 @@ import re
 #tsv = output.tsv
 
 fasta_file = snakemake.input.fasta
+telo_tbl = snakemake.input.telo_tbl
 output_file = snakemake.output.stats
 
-nt_df_header = ["sample","asm_type","haplotype","num_of_contigs","num_of_scaftigs","bases","ungapped_bases","cnt_A","cnt_T","cnt_G","cnt_C","cnt_N","fai"]
+nt_df_header = ["sample","asm_type","haplotype","total_num_of_contigs","num_of_contigs_with_N","bases","ungapped_bases","cnt_A","cnt_T","cnt_G","cnt_C","cnt_N","fai"]
 
 
 def get_nt_length(fasta):
@@ -23,7 +24,7 @@ def get_nt_length(fasta):
     if re.search("/contig_fasta/", fasta):
         asm_type = "contig"
     else:
-        asm_type = "scaftig"
+        asm_type = "scaffold"
     fasta_name = os.path.basename(fasta)
     for hap_tag in ["_hap1.fasta","_hap2.fasta","_unassigned.fasta"]:
         if re.search(hap_tag, fasta_name):
@@ -41,7 +42,7 @@ def get_nt_length(fasta):
     bases = 0
     ungapped_bases = 0
     num_of_contigs = 0
-    num_of_scaftigs = 0
+    num_of_scaffolds = 0
 
     with pysam.FastaFile(fasta) as asm_fasta:
         for ref in asm_fasta.references:
@@ -54,15 +55,26 @@ def get_nt_length(fasta):
             cnt_N += ref_cnt_N
             bases += ref_bases
             ungapped_bases += (ref_bases-ref_cnt_N)
+            num_of_contigs += 1
             if ref_cnt_N > 0:
-                num_of_scaftigs += 1
-            else:
-                num_of_contigs += 1
-
-    data_set = [sample, asm_type, haplotype, num_of_contigs, num_of_scaftigs, bases, ungapped_bases, cnt_A, cnt_T, cnt_G, cnt_C, cnt_N, fai]
+                num_of_scaffolds += 1
+                
+    data_set = [sample, asm_type, haplotype, num_of_contigs, num_of_scaffolds, bases, ungapped_bases, cnt_A, cnt_T, cnt_G, cnt_C, cnt_N, fai]
     
     return pd.DataFrame([data_set],columns = nt_df_header)
 
+def get_num_of_near_t2t(tbl):
+    tbl_dict = {}
+    with open(tbl) as finp:
+        finp.readline()
+        for line in finp:
+            token = line.strip().split("\t")
+            seq_name, start, end, seq_len = token
+            telo_len = eval(end)-eval(start)
+            tbl_dict.setdefault(seq_name,0)
+            if telo_len > 100:
+                tbl_dict[seq_name] += 1
+    return len([seq_name for seq_name in tbl_dict if tbl_dict[seq_name] == 2])
 
 def get_contig_stats(fai_files):
     len_list = pd.Series(dtype=int)
@@ -84,39 +96,14 @@ def get_contig_stats(fai_files):
 def main():
     fasta = fasta_file
     output = output_file
+    tbl = telo_tbl
+    num_t2t = get_num_of_near_t2t(tbl)
     nt_df = get_nt_length(fasta)
-    # samples = nt_df["sample"].unique()
-    # asm_types = nt_df["asm_type"].unique()
-    # numeric_cols = ["num_of_contigs","num_of_scaftigs","bases","ungapped_bases","cnt_A","cnt_T","cnt_G","cnt_C","cnt_N"]
-    # for sample in samples:
-    #     for asm_type in asm_types:
-    #         print (sample, asm_type)
-    #         all_assigned_df = nt_df[(nt_df["sample"] == sample) & (nt_df["asm_type"] == asm_type) & (nt_df["haplotype"] != "unassigned")]
-    #         summed_nt_values = all_assigned_df[numeric_cols].sum()
-    #         new_row_df = pd.DataFrame({
-    #             "sample": [sample],
-    #             "asm_type": [asm_type],
-    #             "haplotype": ["all_assigned"],
-    #             "num_of_contigs": [summed_nt_values["num_of_contigs"]],
-    #             "num_of_scaftigs": [summed_nt_values["num_of_scaftigs"]],
-    #             "bases": [summed_nt_values["bases"]],
-    #             "ungapped_bases": [summed_nt_values["ungapped_bases"]],
-    #             "cnt_A": [summed_nt_values["cnt_A"]],
-    #             "cnt_T": [summed_nt_values["cnt_T"]],
-    #             "cnt_G": [summed_nt_values["cnt_G"]],
-    #             "cnt_C": [summed_nt_values["cnt_C"]],
-    #             "cnt_N": [summed_nt_values["cnt_N"]],
-    #             "fai": [" ".join(all_assigned_df["fai"].unique())],
-    #         })
-    #         print (new_row_df)
-    #         print (nt_df)
-    #         nt_df = pd.concat([nt_df, new_row_df])
-    #         print ("MERGED")
-    #         print (nt_df)
     nt_df["gc_content"] = ((nt_df["cnt_G"]+nt_df["cnt_C"])/nt_df["ungapped_bases"]) * 100
     contig_stats_header = ["over_100k_bases", "l50", "n50", "largest_size", "aun"]
     nt_df[contig_stats_header] = nt_df["fai"].apply(get_contig_stats)
-    nt_df = nt_df[["sample","asm_type","haplotype","num_of_contigs","num_of_scaftigs","bases","gc_content","l50", "n50", "largest_size", "aun"]]
+    nt_df["num_of_near_t2t_contigs"] = num_t2t
+    nt_df = nt_df[["sample","asm_type","haplotype","total_num_of_contigs","num_of_contigs_with_N","num_of_near_t2t_contigs","bases","gc_content","l50", "n50", "largest_size", "aun"]]
     nt_df.to_csv(output, sep="\t", index=None, header=True)
     
 

@@ -17,7 +17,7 @@ REF_DICT = config["REF"]
 ALIGNER = config.get('ALIGNER',"minimap2")
 
 
-raw_manifest_df = pd.read_csv(MANIFEST, sep='\t')
+raw_manifest_df = pd.read_csv(MANIFEST, sep='\t', comment='#', na_values=["","NA","na","N/A"])
 
 ## Universial conversion of manifest df
 
@@ -39,11 +39,6 @@ manifest_df.set_index("SAMPLE",inplace=True)
 scattergather:
     split=PARTS
 
-wildcard_constraints:
-    sample='|'.join(manifest_df.index),
-    alinger='minimap2',
-
-
 def find_ref_fa(wildcards):
     return REF_DICT[wildcards.ref]["PATH"]
 
@@ -64,6 +59,7 @@ def find_all_paf(wildcards):
         if not str(values[idx]) == "nan":
             avail_pafs.append (f'saffire/{wildcards.ref}/results/{wildcards.asm}_{hap}/alignments/{wildcards.asm}_{hap}.{wildcards.aligner}.paf')
     return avail_pafs
+
 
 checkpoint copy_ref_fasta:
     input:
@@ -176,8 +172,11 @@ rule make_minimap_paf:
         ref = find_ref_fa
     output:
         paf = "saffire/{ref}/results/{sample}/alignments/{sample}.minimap2.paf",
+    wildcard_constraints:
+        sample='|'.join(manifest_df.index),
+        ref='[A-Za-z0-9_-]+',
     benchmark: "saffire/{ref}/benchmarks/{sample}.minimap2_paf.benchmark.txt",
-    threads: 8
+    threads: 12
     params:
         map_opts = MINIMAP_PARAMS,
     singularity:
@@ -195,15 +194,18 @@ rule make_minimap_bam:
         fa = find_fasta,
         ref = find_ref_fa
     output:
-        bam = "saffire/{ref}/results/{sample}/alignments/{sample}.minimap2.bam"
+        bam = "saffire/{ref}/results/{sample}/alignments/{sample}.minimap2.bam",
+    wildcard_constraints:
+        sample='|'.join(manifest_df.index),
+        ref='[A-Za-z0-9_-]+',        
     benchmark: "saffire/{ref}/benchmarks/{sample}.minimap2_bam.benchmark.txt",
-    threads: 8
+    threads: 12
     params:
         map_opts = MINIMAP_PARAMS,
     singularity:
         "docker://eichlerlab/align-basics:0.1"
     resources:
-        mem = 60,
+        mem = 12,
         hrs = 120
     shell:
         '''
@@ -216,6 +218,9 @@ rule make_bed:
         genome_index = "saffire/{ref}/reference/{ref}.genome.txt"
     output:
         bed = "saffire/{ref}/results/{sample}/beds/{sample}.{aligner}.bed",
+    wildcard_constraints:
+        sample='|'.join(manifest_df.index),
+        ref='[A-Za-z0-9_-]+',              
     threads: 1
     singularity:
         "docker://eichlerlab/align-basics:0.1"
@@ -233,6 +238,9 @@ rule split_paf:
     output:
         flag = temp(scatter.split("saffire/{{ref}}/tmp/{{sample}}.{{aligner}}.{scatteritem}.paf")),
         temp_paf = temp("saffire/{ref}/tmp/{sample}_uniform.{aligner}.paf")
+    wildcard_constraints:
+        sample='|'.join(manifest_df.index),
+        ref='[A-Za-z0-9_-]+',             
     threads: 1
     resources:
         mem = 8,
@@ -259,7 +267,7 @@ rule split_paf:
         col_out = df.columns.values
         for i, contig in enumerate(df[0].unique()):
             out_num = (i % PARTS) + 1
-            df.loc[df[0] == contig][col_out].to_csv(f'saffire/tmp/{wildcards.sample}.{ALIGNER}.{out_num}-of-{PARTS}.paf', sep='\t', index=False, header=False, mode='a+')
+            df.loc[df[0] == contig][col_out].to_csv(f'saffire/{wildcards.ref}/tmp/{wildcards.sample}.{ALIGNER}.{out_num}-of-{PARTS}.paf', sep='\t', index=False, header=False, mode='a+')
 
 rule trim_break_orient_paf:
     input:
@@ -267,6 +275,9 @@ rule trim_break_orient_paf:
     output:
         contig = temp('saffire/{ref}/tmp/{sample}.{aligner}.{scatteritem}.orient.paf'),
         broken = temp('saffire/{ref}/tmp/{sample}.{aligner}.{scatteritem}.broken.paf')
+    wildcard_constraints:
+        sample='|'.join(manifest_df.index),
+        ref='[A-Za-z0-9_-]+',             
     threads: 1
     params:
         sv_size = SV_SIZE,
@@ -285,6 +296,9 @@ rule concat_pafs:
         paf = find_all_paf
     output:
         paf = 'saffire/{ref}/results/merged_paf/{aligner}/{asm}.concat.paf'
+    wildcard_constraints:
+        sample='|'.join(manifest_df.index),
+        ref='[A-Za-z0-9_-]+',             
     threads:1 
     resources:
         mem=4,
@@ -300,6 +314,9 @@ rule combine_paf:
         flag = rules.split_paf.output.flag
     output:
         paf = 'saffire/{ref}/tmp/{sample}.{aligner}.broken.paf'
+    wildcard_constraints:
+        sample='|'.join(manifest_df.index),
+        ref='[A-Za-z0-9_-]+',             
     threads: 1
     resources:
         mem = 8,
@@ -314,6 +331,9 @@ rule saff_out:
         paf = rules.combine_paf.output.paf
     output:
         saf = 'saffire/{ref}/results/{sample}/saff/{sample}.{aligner}.saf'
+    wildcard_constraints:
+        sample='|'.join(manifest_df.index),
+        ref='[A-Za-z0-9_-]+',             
     threads: 1
     singularity:
         "docker://eichlerlab/rustybam:0.1.33"
@@ -324,3 +344,61 @@ rule saff_out:
         '''
         rb stats --paf {input.paf} > {output.saf}
         '''
+
+rule check_covered_chromosomes:
+    input:
+        paf = "saffire/{ref}/results/{sample}/alignments/{sample}.{aligner}.paf"
+    output:
+        tsv = "saffire/{ref}/results/{sample}/beds/{sample}.{aligner}.chrom_cov.tsv"
+    wildcard_constraints:
+        sample='|'.join(manifest_df.index),
+        ref='[A-Za-z0-9_-]+',             
+    threads: 1
+    resources:
+        mem = 8,
+        hrs = 24
+    run:
+        from collections import defaultdict
+
+        chrom_length_dict = dict()
+        chrom_intervals = defaultdict(list)
+        with open(input.paf) as finp:
+            read_lines = finp.read().strip().split("\n")
+        for line in read_lines:
+            token = line.split("\t")[:9]
+            chrom, start, end, contigname, chrom_length = token[5], int(token[7]), int(token[8]), token[0], int(token[6])
+            if not chrom in chrom_length_dict:
+                chrom_length_dict[chrom] = chrom_length
+            chrom_intervals[chrom].append((start,end))
+        
+        merged_dict = dict()
+        for chrom in sorted(chrom_intervals):
+            intervals = sorted(chrom_intervals[chrom])
+            merged = []
+            current_start, current_end = intervals[0]
+            for start, end in intervals[1:]:
+                if start <= current_end:
+                    current_end = max(current_end, end)
+                else:
+                    merged.append((current_start, current_end))
+                    current_start, current_end = start, end
+            merged.append((current_start, current_end))
+            merged_dict[chrom] = merged
+        chroms = [f"chr{i}" for i in range(1,23)]+["chrX","chrY"]
+        with open(output.tsv, "w") as fout:
+            print ("chrom\tcovered_pct", file=fout)
+            for chrom in chroms:
+                try:
+                    covered_length = 0
+                    chrom_length = chrom_length_dict[chrom]
+                    for intervals in merged_dict[chrom]:
+                        covered_length += (intervals[1]-intervals[0])
+                    covered_rate = covered_length/chrom_length*100
+
+                except:
+                    covered_rate = 0.0
+                print (f"{chrom}\t{covered_rate:.2f}", file=fout)
+                
+            
+
+        

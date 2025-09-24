@@ -13,7 +13,7 @@ configfile: 'config/config_asm_qc.yaml'
 
 MANIFEST = config.get('MANIFEST', 'config/manifest.tab')
 
-raw_manifest_df = pd.read_csv(MANIFEST, sep='\t')
+raw_manifest_df = pd.read_csv(MANIFEST, sep='\t', comment='#', na_values=["","NA","na","N/A"])
 
 ## Universial conversion of manifest df
 
@@ -33,7 +33,8 @@ BED = config.get('BED', 'config/moddot_regions.bed')
 bed_df = pd.read_csv(
     BED, sep="\t", header=None, names=["chr", "start", "end"], dtype=str
 )
-bed_df["NAME"] = bed_df["chr"] + "_" + bed_df["start"] + "_" + bed_df["end"]
+
+bed_df["NAME"] = bed_df["chr"] + "_" + (bed_df["start"].astype(int) + 1).astype(str) + "_" + bed_df["end"]
 bed_df.set_index("NAME", drop=True, inplace=True)
 
 acros = ['chr13', 'chr14', 'chr15', 'chr21', 'chr22']
@@ -44,6 +45,9 @@ except KeyError:
     REF = "/net/eichler/vol28/eee_shared/assemblies/CHM13/T2T/v2.0/T2T-CHM13v2.fasta"
 
 # rustybam/0.1.16
+
+def get_region_name(wildcards):
+    return bed_df[bed_df["chr"] == wildcards.region].index[0]
 
 def cigar_tuple(cigar):
     """
@@ -70,7 +74,7 @@ def get_all_flag(wildcards):
 
 rule summarize_moddot_results:
     input:
-        
+        get_all_flag
     output:
         tsv = "moddotplot/results/{sample}.generated_acros.tsv"
     resources:
@@ -82,15 +86,17 @@ rule summarize_moddot_results:
         called = [[wildcards.sample]]
         plot_dir=f"moddotplot/results/{wildcards.sample}"
         for chrom in acros:
-            if len(glob.glob(f"{plot_dir}/{chrom}_1_*"))>0:
-                called[0].append("True")
-            else:
-                called[0].append("False")
+            region_name = bed_df[bed_df["chr"] == chrom].index[0]
+            try:
+                pdf = glob.glob(f"{plot_dir}/{region_name}_*_FULL.pdf")[0]
+                called[0].append(os.path.basename(pdf).replace(f"{region_name}_","").replace("_FULL.pdf",""))
+            except IndexError:
+                called[0].append("NA")
         result_df = pd.DataFrame(called, columns = header)
         result_df.to_csv(output.tsv, sep="\t", index=False)
                 
 
-rule subset_target_region:
+checkpoint subset_target_region:
     input:
         bed=BED,
     output:
@@ -100,10 +106,8 @@ rule subset_target_region:
         hrs=2,
     threads: 1
     run:
-        out_df = bed_df.loc[wildcards.region]
-        with open(output.bed, "w") as out_file:
-            out_file.write("\t".join(out_df[["chr", "start", "end"]]))
-            out_file.write("\n")
+        out_df = bed_df[bed_df["chr"] == wildcards.region]
+        out_df[["chr", "start", "end"]].to_csv(output.bed, sep="\t", header=False, index=False)
 
 rule liftover:
     input:
@@ -177,8 +181,7 @@ rule group_tigs:
             qrylen_dict = {}
             with open(input.paf) as f:
                 for line in f:
-                    query, query_len, query_start, query_end, strand, target, target_len, target_start, target_end, num_matches, alignment_len = line.strip().split("\t")[
-                                                                                                                                                 :11]
+                    query, query_len, query_start, query_end, strand, target, target_len, target_start, target_end, num_matches, alignment_len = line.strip().split("\t")[:11]
                     qrylen_dict[query] = query_len
                     if int(alignment_len) < 200000:
                         continue
@@ -326,6 +329,8 @@ rule get_pq_fa:
         hap = "fcs_cleaned_fasta/{sample}/{sample}.fasta"
     output:
         fa="moddotplot/fasta/{sample}/{region}_pq_contig.fa"
+    params:
+        region_name = get_region_name        
     resources:
         mem=10,
         hrs=24,
@@ -334,7 +339,7 @@ rule get_pq_fa:
     shell:
         """
         if [ -s {input.bed} ]; then
-            echo ">{wildcards.region}" > {output.fa}
+            echo ">{params.region_name}_$(awk '{{print $1}}' {input.bed})" > {output.fa}
             bedtools getfasta -fi {input.hap} -bed {input.bed} | tail -n +2 >> {output.fa}
             samtools faidx {output.fa}
         else
@@ -348,7 +353,6 @@ rule pq_selfplot:
         fa = "moddotplot/fasta/{sample}/{region}_pq_contig.fa"
     output:
         flag = "moddotplot/results/{sample}/.{region}.done"
-
     resources:
         mem=10,
         hrs=24,

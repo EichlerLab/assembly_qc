@@ -6,6 +6,7 @@ import sys
 configfile: 'config/config_asm_qc.yaml'
 MANIFEST = config.get('MANIFEST', 'config/manifest_asm_qc.tab')
 
+
 SNAKEMAKE_DIR = os.path.dirname(workflow.snakefile)
 
 N50_SCRIPT = "/net/eichler/vol28/7200/software/pipelines/compteam_tools/n50"
@@ -26,6 +27,14 @@ def find_all_bed_set(wildcards):
     all_bed_set = [f"saffire/{wildcards.ref}/results/{sample}/beds/{sample}.{wildcards.aligner}.bed" for sample in haplotype_set]
     return all_bed_set
 
+def find_all_saf_paf(wildcards):
+    haplotype_set = [f"{wildcards.asm}_hap1"]
+    paf_set = [f"{wildcards.asm}_hap1"]
+    if not pd.isna(full_manifest_df.at[wildcards.asm, "H2"]):
+        haplotype_set.append(f"{wildcards.asm}_hap2")
+    all_paf_set = [f"saffire/{wildcards.ref}/results/{sample}/alignments/{sample}.{wildcards.aligner}.paf" for sample in haplotype_set]
+    return all_paf_set
+
 
 def get_asm_manifest_df(manifest_df):
 
@@ -42,7 +51,7 @@ def get_asm_manifest_df(manifest_df):
 
     return pd.DataFrame(df_transform)
 
-full_manifest_df = pd.read_csv(MANIFEST, header=0, sep='\t', comment='#').fillna('NA')
+full_manifest_df = pd.read_csv(MANIFEST, header=0, sep='\t', comment='#', na_values=["","NA","na","N/A"])
 conv_manifest_df = get_asm_manifest_df(full_manifest_df)
 
 full_manifest_df.set_index("SAMPLE",inplace=True) ## manifest df for merqury
@@ -51,10 +60,15 @@ conv_manifest_df.set_index("SAMPLE",inplace=True) ## shortened df using only SAM
 
 rule get_contig_length_plot:
     input:
-        asm_fasta = find_fasta,
+        scaffold_asm_fasta = find_fasta,
+        contig_asm_fasta = find_contig_fasta
     output:
-        dist_plot = "plots/contigs/{sample}.dist.log.png",
-        scatter_plot = "plots/contigs/{sample}.scatter.log.png",
+        scaffold_dist_plot = "plots/contigs/{sample}.scaffold.dist.log.png",
+        scaffold_scatter_plot = "plots/contigs/{sample}.scaffold.scatter.log.png",
+        scaffold_n50 = "stats/seq_stats/{sample}.scaffold.n50",
+        contig_dist_plot = "plots/contigs/{sample}.contig.dist.log.png",
+        contig_scatter_plot = "plots/contigs/{sample}.contig.scatter.log.png",
+        contig_n50 = "stats/seq_stats/{sample}.contig.n50"
     threads:
         1
     resources:
@@ -64,7 +78,8 @@ rule get_contig_length_plot:
         script_path = N50_SCRIPT
     shell:
         '''
-        {params.script_path} {input.asm_fasta} -p {output.scatter_plot} -d {output.dist_plot} -t {wildcards.sample} -l -n
+        {params.script_path} {input.scaffold_asm_fasta} -p {output.scaffold_scatter_plot} -d {output.scaffold_dist_plot} -t {wildcards.sample} -l > {output.scaffold_n50}
+        {params.script_path} {input.contig_asm_fasta} -p {output.contig_scatter_plot} -d {output.contig_dist_plot} -t {wildcards.sample} -l > {output.contig_n50}
         '''
 
 rule get_ideo_plot:
@@ -89,8 +104,7 @@ rule get_ideo_plot:
 
 rule get_ploidy_plot:
     input:
-        hap_one_paf = "saffire/{ref}/results/{asm}_hap1/alignments/{asm}_hap1.{aligner}.paf",
-        hap_two_paf = "saffire/{ref}/results/{asm}_hap2/alignments/{asm}_hap2.{aligner}.paf",
+        paf_set = find_all_saf_paf
     output:
         pdf = "plots/ploidy/{ref}/{aligner}/{asm}.ploidy.pdf",
         summary = "plots/ploidy/{ref}/{aligner}/{asm}.summary.txt",
@@ -105,5 +119,5 @@ rule get_ploidy_plot:
         "docker://eichlerlab/binf-rplot:0.1"
     shell:
         '''
-        Rscript {params.script_dir}/ploidy.R {params.script_dir} {wildcards.asm} {input.hap_one_paf} {input.hap_two_paf} {output.pdf} {output.summary}
+        Rscript {params.script_dir}/ploidy.R {params.script_dir} {wildcards.asm} {input.paf_set} {output.pdf} {output.summary}
         '''

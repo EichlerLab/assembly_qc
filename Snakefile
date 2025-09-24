@@ -31,7 +31,7 @@ def get_asm_manifest_df(manifest_df):
 
     return pd.DataFrame(df_transform)
 
-full_manifest_df = pd.read_csv(MANIFEST, header=0, sep='\t', comment='#')
+full_manifest_df = pd.read_csv(MANIFEST, header=0, sep='\t', comment='#', na_values=["","NA","na","N/A"])
 conv_manifest_df = get_asm_manifest_df(full_manifest_df)
 
 full_manifest_df.set_index("SAMPLE",inplace=True) ## manifest df for merqury
@@ -40,7 +40,7 @@ conv_manifest_df.set_index("SAMPLE",inplace=True) ## shortened df using only SAM
 def get_all_inputs():
     inputs = [
         expand(
-            "stats/seq_stats/{sample}.scaftig.stats",
+            "stats/seq_stats/{sample}.scaffold.stats",
             sample=conv_manifest_df.index.values,
         ),
         expand(
@@ -57,6 +57,12 @@ def get_all_inputs():
             sample=conv_manifest_df.index.values,
             aligner=ALIGNER,
         ),
+	expand(
+            "saffire/{ref}/results/{sample}/alignments/{sample}.{aligner}.bam",
+            ref=REF_DICT,
+            sample=conv_manifest_df.index.values,
+            aligner=ALIGNER,
+        ),  
         expand(
             "saffire/{ref}/results/{sample}/beds/{sample}.{aligner}.bed",
             ref=REF_DICT,
@@ -68,7 +74,7 @@ def get_all_inputs():
             sample=conv_manifest_df.index.values,
         ),
         expand(
-            "plots/contigs/{sample}.scatter.log.png",
+            "plots/contigs/{sample}.contig.scatter.log.png",
             sample=conv_manifest_df.index.values,
         ),
         expand(
@@ -115,7 +121,7 @@ def get_plot_inputs():
             aligner=ALIGNER,
         ),
         expand(
-            "plots/contigs/{sample}.scatter.log.png",
+            "plots/contigs/{sample}.contig.scatter.log.png",
             sample=conv_manifest_df.index.values,
         ),
     ]
@@ -241,7 +247,7 @@ rule get_plots:
 rule get_stats:
     input:
         expand(
-            "stats/seq_stats/{sample}.scaftig.stats",
+            "stats/seq_stats/{sample}.scaffold.stats",
             sample=conv_manifest_df.index.values,
         ),
         expand(
