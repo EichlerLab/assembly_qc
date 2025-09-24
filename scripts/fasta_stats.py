@@ -24,7 +24,7 @@ def get_nt_length(fasta):
     if re.search("/contig_fasta/", fasta):
         asm_type = "contig"
     else:
-        asm_type = "scaftig"
+        asm_type = "scaffold"
     fasta_name = os.path.basename(fasta)
     for hap_tag in ["_hap1.fasta","_hap2.fasta","_unassigned.fasta"]:
         if re.search(hap_tag, fasta_name):
@@ -42,7 +42,7 @@ def get_nt_length(fasta):
     bases = 0
     ungapped_bases = 0
     num_of_contigs = 0
-    num_of_scaftigs = 0
+    num_of_scaffolds = 0
 
     with pysam.FastaFile(fasta) as asm_fasta:
         for ref in asm_fasta.references:
@@ -57,9 +57,9 @@ def get_nt_length(fasta):
             ungapped_bases += (ref_bases-ref_cnt_N)
             num_of_contigs += 1
             if ref_cnt_N > 0:
-                num_of_scaftigs += 1
+                num_of_scaffolds += 1
                 
-    data_set = [sample, asm_type, haplotype, num_of_contigs, num_of_scaftigs, bases, ungapped_bases, cnt_A, cnt_T, cnt_G, cnt_C, cnt_N, fai]
+    data_set = [sample, asm_type, haplotype, num_of_contigs, num_of_scaffolds, bases, ungapped_bases, cnt_A, cnt_T, cnt_G, cnt_C, cnt_N, fai]
     
     return pd.DataFrame([data_set],columns = nt_df_header)
 

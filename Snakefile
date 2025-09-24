@@ -40,7 +40,7 @@ conv_manifest_df.set_index("SAMPLE",inplace=True) ## shortened df using only SAM
 def get_all_inputs():
     inputs = [
         expand(
-            "stats/seq_stats/{sample}.scaftig.stats",
+            "stats/seq_stats/{sample}.scaffold.stats",
             sample=conv_manifest_df.index.values,
         ),
         expand(
@@ -247,7 +247,7 @@ rule get_plots:
 rule get_stats:
     input:
         expand(
-            "stats/seq_stats/{sample}.scaftig.stats",
+            "stats/seq_stats/{sample}.scaffold.stats",
             sample=conv_manifest_df.index.values,
         ),
         expand(
