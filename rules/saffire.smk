@@ -51,13 +51,13 @@ def find_fasta_index(wildcards):
 def find_contigs(wildcards):
     return gather.split('saffire/{ref}/tmp/{sample}.{aligner}.{scatteritem}.broken.paf', ref=wildcards.ref, sample=wildcards.sample, aligner=wildcards.aligner)
 
-def find_all_paf(wildcards):
+def find_all_trimmed_paf(wildcards):
     avail_pafs = []
     haps = ["hap1","hap2","unassigned"]
     values = raw_manifest_df.loc[raw_manifest_df["SAMPLE"] == wildcards.asm][["H1","H2","UNASSIGNED"]].iloc[0].tolist()
     for idx, hap in enumerate(haps):
         if not str(values[idx]) == "nan":
-            avail_pafs.append (f'saffire/{wildcards.ref}/results/{wildcards.asm}_{hap}/alignments/{wildcards.asm}_{hap}.{wildcards.aligner}.paf')
+            avail_pafs.append (f'saffire/{wildcards.ref}/results/{wildcards.asm}_{hap}/alignments/{wildcards.asm}_{hap}.{wildcards.aligner}.trimmed.paf')
     return avail_pafs
 
 
@@ -72,8 +72,7 @@ checkpoint copy_ref_fasta:
     resources:
         mem = 4,
         hrs = 1,
-    shell:
-        """
+    shell: """
         cp {input.raw_ref} {output.ref}
         samtools faidx {output.ref}
         cut -f1 {output.fai}> {output.genome_index}
@@ -90,10 +89,9 @@ rule get_meryl_db:
     resources:
         mem = 16,
         hrs = 72
-    shell:
-        '''
+    shell: """
         meryl count k=19 output {output.meryl_db_name} {input.ref}
-        '''
+        """
 
 rule get_kmer_count:
     input:
@@ -106,10 +104,9 @@ rule get_kmer_count:
     resources:
         mem = 8,
         hrs = 72
-    shell:
-        '''
+    shell: """ 
         meryl print greater-than distinct=0.9998 {input.meryl_db_name} > {output.kmer_count}
-        '''
+        """
 
 rule get_batch_ids:
     input:
@@ -151,9 +148,7 @@ rule split_fasta:
         fasta=find_fasta,
         batch_file="saffire/tmp/{sample}.{scatteritem}.batch",
     output:
-        scatter_fasta=temp(
-            "saffire/tmp/{sample}.{scatteritem}.fasta"
-        ),
+        scatter_fasta=temp("saffire/tmp/{sample}.{scatteritem}.fasta"),
     resources:
         mem=4,
         hrs=24,
@@ -161,8 +156,7 @@ rule split_fasta:
     threads: 4
     singularity:
         "docker://eichlerlab/binf-basics:0.1"
-    shell:
-        """
+    shell: """
         samtools faidx {input.fasta} -r {input.batch_file} > {output.scatter_fasta}
         """
 
@@ -183,11 +177,28 @@ rule make_minimap_paf:
         "docker://eichlerlab/align-basics:0.1"
     resources:
         mem = 12,
-        hrs = 120
-    shell:
-        '''
+        hrs = 48
+    shell: """
         minimap2 -c -t {threads} -K {resources.mem}G --cs {params.map_opts} --secondary=no --eqx -Y {input.ref} {input.fa} > {output.paf}
-        '''
+        """
+
+rule trim_minimap_paf:
+    input:
+        paf = "saffire/{ref}/results/{sample}/alignments/{sample}.minimap2.paf",
+    output:
+        paf = "saffire/{ref}/results/{sample}/alignments/{sample}.minimap2.trimmed.paf",
+    wildcard_constraints:
+        sample='|'.join(manifest_df.index),
+        ref='[A-Za-z0-9_-]+',
+    threads: 12
+    singularity:
+        "docker://eichlerlab/rustybam:0.1.33"
+    resources:
+        mem = 12,
+        hrs = 48
+    shell: """
+        rustybam trim-paf --remove-contained {input.paf} > {output.paf}
+        """
 
 rule make_minimap_bam:
     input:
@@ -206,15 +217,14 @@ rule make_minimap_bam:
         "docker://eichlerlab/align-basics:0.1"
     resources:
         mem = 12,
-        hrs = 120
-    shell:
-        '''
+        hrs = 48
+    shell: """
         minimap2 -c -t {threads} -K {resources.mem}G --cs -a {params.map_opts} --MD --secondary=no --eqx -Y {input.ref} {input.fa} | samtools view -S -b /dev/stdin | samtools sort -@ {threads} -o {output.bam}
-        '''
+        """
 
 rule make_bed:
     input:
-        paf = "saffire/{ref}/results/{sample}/alignments/{sample}.{aligner}.paf",
+        paf = "saffire/{ref}/results/{sample}/alignments/{sample}.{aligner}.trimmed.paf",
         genome_index = "saffire/{ref}/reference/{ref}.genome.txt"
     output:
         bed = "saffire/{ref}/results/{sample}/beds/{sample}.{aligner}.bed",
@@ -227,10 +237,9 @@ rule make_bed:
     resources:
         mem = 12,
         hrs = 1
-    shell:
-        '''
+    shell: """
         awk -vOFS="\t" '{{print $6,$8,$9,$1,$12}}' {input.paf} | bedtools sort -g {input.genome_index} > {output.bed}
-        '''
+        """
 
 rule split_paf:
     input:
@@ -286,14 +295,14 @@ rule trim_break_orient_paf:
     resources:
         mem = 24,
         hrs = 24
-    shell:
-        '''
+    shell: """
         rustybam orient {input.paf} | rustybam trim-paf | rb filter --paired-len 1000000 > {output.contig}
         rustybam break-paf --max-size {params.sv_size} {output.contig} > {output.broken}
-        '''
+        """
+
 rule concat_pafs:
     input:
-        paf = find_all_paf
+        paf = find_all_trimmed_paf
     output:
         paf = 'saffire/{ref}/results/merged_paf/{aligner}/{asm}.concat.paf'
     wildcard_constraints:

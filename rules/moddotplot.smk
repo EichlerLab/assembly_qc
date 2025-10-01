@@ -7,6 +7,7 @@ import pandas as pd
 import numpy as np
 import re
 import glob
+import pysam
 
 
 configfile: 'config/config_asm_qc.yaml'
@@ -87,10 +88,11 @@ rule summarize_moddot_results:
         plot_dir=f"moddotplot/results/{wildcards.sample}"
         for chrom in acros:
             region_name = bed_df[bed_df["chr"] == chrom].index[0]
-            try:
-                pdf = glob.glob(f"{plot_dir}/{region_name}_*_FULL.pdf")[0]
-                called[0].append(os.path.basename(pdf).replace(f"{region_name}_","").replace("_FULL.pdf",""))
-            except IndexError:
+            pdf_files = glob.glob(f"{plot_dir}/{region_name}_*_FULL.pdf")
+            if len(pdf_files) > 0:
+                contig_names = [os.path.basename(pdf).replace(f"{region_name}_","").replace("_FULL.pdf","") for pdf in pdf_files]
+                called[0].append(",".join(contig_names))
+            else:
                 called[0].append("NA")
         result_df = pd.DataFrame(called, columns = header)
         result_df.to_csv(output.tsv, sep="\t", index=False)
@@ -121,8 +123,7 @@ rule liftover:
     threads: 1
     singularity:
         "docker://eichlerlab/rustybam:0.1.33"
-    shell:
-        """
+    shell: """
         rustybam liftover --bed {input.bed} {input.paf} > {output.paf}
         """
 
@@ -138,8 +139,7 @@ rule trim_paf:
     threads: 1
     singularity:
         "docker://eichlerlab/rustybam:0.1.33"
-    shell:
-        """
+    shell: """
         rustybam trim-paf {input.paf} > {output.paf}
         """
 
@@ -154,8 +154,7 @@ rule paf_stats:
     threads: 1
     singularity:
         "docker://eichlerlab/rustybam:0.1.33"
-    shell:
-        """
+    shell: """
         rustybam stats --paf --qbed {input.paf} > {output.stats}
         """
 
@@ -328,7 +327,8 @@ rule get_pq_fa:
         bed="moddotplot/contigs/{sample}/{region}_pq_contig.bed",
         hap = "fcs_cleaned_fasta/{sample}/{sample}.fasta"
     output:
-        fa="moddotplot/fasta/{sample}/{region}_pq_contig.fa"
+        fa = "moddotplot/fasta/{sample}/{region}_pq_contig.fa",
+        fai = "moddotplot/fasta/{sample}/{region}_pq_contig.fa.fai",
     params:
         region_name = get_region_name        
     resources:
@@ -336,16 +336,25 @@ rule get_pq_fa:
         hrs=24,
         disk_free=1,
     threads: 1
-    shell:
-        """
-        if [ -s {input.bed} ]; then
-            echo ">{params.region_name}_$(awk '{{print $1}}' {input.bed})" > {output.fa}
-            bedtools getfasta -fi {input.hap} -bed {input.bed} | tail -n +2 >> {output.fa}
-            samtools faidx {output.fa}
-        else
-            touch {output.fa}
-        fi
-        """
+    run:
+        input_bed = input.bed
+        input_hap = pysam.FastaFile(input.hap)
+        output_fa = output.fa
+        region_name = params.region_name
+        output_fa_data = []
+        if (os.path.isfile(input_bed)) and (os.path.getsize(input_bed) > 0):
+            with open(input_bed) as finp_bed:
+                finp_bed_lines = finp_bed.read().strip().split("\n")
+            for bed_line in finp_bed_lines:
+                token = bed_line.split("\t")
+                contig_name, start, end = token[:3]
+                start, end = int(start)+1, int(end)
+                output_fa_seq_name = f">{region_name}_{contig_name}"
+                subseq = input_hap.fetch(contig_name, start, end)
+                output_fa_data += [output_fa_seq_name, subseq]
+        with open(output_fa,"w") as fout:
+            fout.write("\n".join(output_fa_data))
+        shell(f"samtools faidx {output_fa}")
 
 rule pq_selfplot:
     input:
@@ -360,8 +369,7 @@ rule pq_selfplot:
     threads: 1,
     singularity:
         "docker://eichlerlab/moddotplot:0.9.0"
-    shell:
-        """
+    shell: """
         if [ -s {input.bed} ]; then
             moddotplot static -f {input.fa} --no-hist --no-bed -o $( dirname {output.flag} )
             touch {output.flag}
