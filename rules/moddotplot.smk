@@ -328,7 +328,6 @@ rule get_pq_fa:
         hap = "fcs_cleaned_fasta/{sample}/{sample}.fasta"
     output:
         fa = "moddotplot/fasta/{sample}/{region}_pq_contig.fa",
-        fai = "moddotplot/fasta/{sample}/{region}_pq_contig.fa.fai",
     params:
         region_name = get_region_name        
     resources:
@@ -354,7 +353,8 @@ rule get_pq_fa:
                 output_fa_data += [output_fa_seq_name, subseq]
         with open(output_fa,"w") as fout:
             fout.write("\n".join(output_fa_data))
-        shell(f"samtools faidx {output_fa}")
+        if len(output_fa_data) > 0:
+            shell(f"samtools faidx {output_fa}")
 
 rule pq_selfplot:
     input:
