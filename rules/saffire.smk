@@ -200,6 +200,7 @@ rule trim_minimap_paf:
         rustybam trim-paf --remove-contained {input.paf} > {output.paf}
         """
 
+# added -L param in case the CIGAR is > 65535 since older tools are unable to convert alignments with >65535 CIGAR ops to BAM. (https://lh3.github.io/minimap2/minimap2.html)
 rule make_minimap_bam:
     input:
         fa = find_fasta,
@@ -219,7 +220,7 @@ rule make_minimap_bam:
         mem = 12,
         hrs = 48
     shell: """
-        minimap2 -c -t {threads} -K {resources.mem}G --cs -a {params.map_opts} --MD --secondary=no --eqx -Y {input.ref} {input.fa} | samtools view -S -b /dev/stdin | samtools sort -@ {threads} -o {output.bam}
+        minimap2 -c -t {threads} -K {resources.mem}G --cs -a {params.map_opts} --MD --secondary=no --eqx -Y -L {input.ref} {input.fa} | samtools view -S -b /dev/stdin | samtools sort -@ {threads} -o {output.bam}
         """
 
 rule make_bed:

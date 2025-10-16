@@ -77,7 +77,7 @@ rule summarize_moddot_results:
     input:
         get_all_flag
     output:
-        tsv = "moddotplot/results/{sample}.generated_acros.tsv"
+        tsv = "stats/acro_stats/{sample}.generated_acros.tsv"
     resources:
         mem=4,
         hrs=1,
@@ -116,7 +116,7 @@ rule liftover:
         bed=rules.subset_target_region.output.bed,
         paf='saffire/CHM13/results/{sample}/alignments/{sample}.minimap2.paf',
     output:
-        paf= temp("moddotplot/tmp/liftover/{sample}.{region}.paf"),
+        paf= "moddotplot/tmp/liftover/{sample}.{region}.paf",
     resources:
         mem=24,
         hrs=2,

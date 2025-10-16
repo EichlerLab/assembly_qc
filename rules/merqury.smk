@@ -51,6 +51,11 @@ def agg_reads(wildcards):
             rules.run_meryl.output.meryl, sample=wildcards.sample, read=fofn_df.index
         )
     )
+def find_clean_haps(wildcards):
+    if not os.path.isfile(manifest_df.at[wildcards.asm, "H2"]):
+        return f"fcs_cleaned_fasta/{wildcards.asm}_hap1/{wildcards.asm}_hap1.fasta"
+    else:
+        return [ f"fcs_cleaned_fasta/{wildcards.asm}_{hap}/{wildcards.asm}_{hap}.fasta" for hap in ["hap1","hap2"]]
 
 def find_cleaned_hap_one(wildcards):
     return f"fcs_cleaned_fasta/{wildcards.asm}_hap1/{wildcards.asm}_hap1.fasta"
@@ -183,11 +188,10 @@ rule meryl_combine:
 rule merqury_script:
     input:
         meryl=find_meryl,
-        hap_one=find_cleaned_hap_one,
+        cleaned_haps = find_clean_haps
     output:
         run_script="merqury/results/{asm}/{asm}_run.sh",
     params:
-        hap_two=find_cleaned_hap_two,
         unassigned_contig=find_unassigned_contig,
     resources:
         mem=lambda wildcards, attempt: (2 ** (attempt-1)) * 4,
@@ -195,12 +199,12 @@ rule merqury_script:
     threads: 1
     run:
         meryl_abs = os.path.abspath(input.meryl)
-        hap_one_abs = os.path.abspath(input.hap_one)
-        if (params.hap_two.upper() == "NA") or (not os.path.isfile(params.hap_two)):
-            asm_all = [hap_one_abs]
-        else:
-            asm_all = [hap_one_abs, os.path.abspath(params.hap_two)]
-        asm_all = " ".join(asm_all)
+        # hap_one_abs = os.path.abspath(input.hap_one)
+        # if (params.hap_two.upper() == "NA") or (not os.path.isfile(params.hap_two)):
+        #     asm_all = [hap_one_abs]
+        # else:
+        #     asm_all = [hap_one_abs, os.path.abspath(params.hap_two)]
+        asm_all = " ".join(input.cleaned_haps)
         with open(output.run_script, "w") as outfile:
             outfile.write("#!/usr/bin/env bash \n")
             outfile.write(f"merqury.sh {meryl_abs} {asm_all} {wildcards.asm}\n")

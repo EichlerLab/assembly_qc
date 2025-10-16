@@ -101,7 +101,7 @@ def get_all_inputs():
         aligner=ALIGNER,
     )
     moddot_inputs = expand(
-        "moddotplot/results/{sample}.generated_acros.tsv",
+        "stats/acro_stats/{sample}.generated_acros.tsv",
         sample=conv_manifest_df.index.values,
     )
 
@@ -136,7 +136,7 @@ def get_plot_inputs():
     )
 
     moddot_inputs = expand(
-        "moddotplot/results/{sample}.generated_acros.tsv",
+        "stats/acro_stats/{sample}.generated_acros.tsv",
         sample=conv_manifest_df.index.values,
     )
 
