@@ -199,12 +199,8 @@ rule merqury_script:
     threads: 1
     run:
         meryl_abs = os.path.abspath(input.meryl)
-        # hap_one_abs = os.path.abspath(input.hap_one)
-        # if (params.hap_two.upper() == "NA") or (not os.path.isfile(params.hap_two)):
-        #     asm_all = [hap_one_abs]
-        # else:
-        #     asm_all = [hap_one_abs, os.path.abspath(params.hap_two)]
-        asm_all = " ".join(input.cleaned_haps)
+        haps_abs = [ os.path.abspath(cleaned_hap) for cleaned_hap in input.cleaned_haps ]
+        asm_all = " ".join(haps_abs)
         with open(output.run_script, "w") as outfile:
             outfile.write("#!/usr/bin/env bash \n")
             outfile.write(f"merqury.sh {meryl_abs} {asm_all} {wildcards.asm}\n")
