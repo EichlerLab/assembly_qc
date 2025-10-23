@@ -82,9 +82,9 @@ def get_all_inputs():
         expand("stats/acro_stats/{sample}.generated_acros.tsv",
             sample=conv_manifest_df.index.values,
         ),
-        expand("moddotplot/liftover/stats/{sample}/lifted_contigs.tsv",
-            sample=conv_manifest_df.index.values,
-        )
+        # expand("moddotplot/liftover/stats/{sample}/lifted_contigs.tsv",
+        #     sample=conv_manifest_df.index.values,
+        # )
     ]
 
     ploidy_inputs = expand("plots/ploidy/CHM13/{aligner}/{asm}.ploidy.pdf",
@@ -129,9 +129,9 @@ def get_plot_inputs():
         expand("stats/acro_stats/{sample}.generated_acros.tsv",
             sample=conv_manifest_df.index.values,
         ),
-        expand("moddotplot/liftover/stats/{sample}/lifted_contigs.tsv",
-            sample=conv_manifest_df.index.values,
-        )
+        # expand("moddotplot/liftover/stats/{sample}/lifted_contigs.tsv",
+        #     sample=conv_manifest_df.index.values,
+        # )
     ]
 
     if int(TAXID) == 9606: # human

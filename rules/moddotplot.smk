@@ -62,13 +62,13 @@ def cigar_tuple(cigar):
         tuples.append([int(lengths[i]), ops[i]])
     return tuples
 
-def find_tigs(wildcards):
-    tig_dict = {}
-    for sample in manifest_df.index:
-        for region in bed_df.index:
-            tig_dict[f'{sample}_{region}_pq'] = rules.tag_contigs.output.pq.format(sample=sample,region=region)
-            tig_dict[f'{sample}_{region}_p'] = rules.tag_contigs.output.p.format(sample=sample,region=region)
-    return tig_dict
+def find_tigs_flag(wildcards):
+    return [ f"moddotplot/contigs/{wildcards.sample}/{region}_done" for region in bed_df.index ]
+def find_pq_tigs(wildcards):
+    return [ f"moddotplot/contigs/{wildcards.sample}/{region}_pq_contig.bed" for region in bed_df.index ]
+
+def find_p_tigs(wildcards): 
+    return [ f"moddotplot/contigs/{wildcards.sample}/{region}_p_contig.bed" for region in bed_df.index ]
 
 def get_all_flag(wildcards):
     return [ f"moddotplot/results/{wildcards.sample}/.{region}.done" for region in acros]
@@ -160,11 +160,14 @@ rule paf_stats:
 
 rule group_tigs:
     input:
-        unpack(find_tigs),
+        flag = find_tigs_flag,
         paf = "saffire/CHM13/results/{sample}/alignments/{sample}.minimap2.paf",
     output:
         tigs = "moddotplot/liftover/stats/{sample}/lifted_contigs.tsv",
         tab = "moddotplot/liftover/stats/{sample}/lifted_contigs.tab"
+    params:
+        p_tigs = find_p_tigs,
+        pq_tigs = find_pq_tigs,
     threads: 1
     resources:
         mem=10,
@@ -172,44 +175,71 @@ rule group_tigs:
         disk_free=1
 
     run:
+        sample = wildcards.sample
+        input_pq_tigs = params.pq_tigs
+        input_p_tigs = params.p_tigs
+        input_paf = input.paf
+        
         acros = ['chr13', 'chr14', 'chr15', 'chr21', 'chr22']
         fout = open(output.tigs, 'w')
         print('Sample\tArm\tTig\tTig_start\tTig_end\tSize\tChrom',file=fout)
         haps = open(output.tab, 'w')
         print('SAMPLE\tHAP', file=haps)
+        
+        qry_chrom_tracker = {}
+        qrylen_dict = {}
+        with open(input_paf) as f:
+            lines = f.read().strip().split("\n")
+        for line in lines:
+            query, query_len, query_start, query_end, strand, target, target_len, target_start, target_end, num_matches, alignment_len = line.strip().split("\t")[:11]
+            qrylen_dict[query] = query_len
+            if int(alignment_len) < 200000:
+                continue
+            if query not in qry_chrom_tracker:
+                qry_chrom_tracker[query] = []
+            if not target in qry_chrom_tracker[query]:
+                qry_chrom_tracker[query].append(target)
 
-        for sample in manifest_df.index:
-            qry_chrom_tracker = {}
-            qrylen_dict = {}
-            with open(f'results/asm_to_chm13/{sample}.paf') as f:
-                for line in f:
-                    query, query_len, query_start, query_end, strand, target, target_len, target_start, target_end, num_matches, alignment_len = line.strip().split("\t")[:11]
-                    qrylen_dict[query] = query_len
-                    if int(alignment_len) < 200000:
-                        continue
-                    if query not in qry_chrom_tracker:
-                        qry_chrom_tracker[query] = []
-                    qry_chrom_tracker[query].append(target)
+        for pq_tig in input_pq_tigs:
+            if not os.path.getsize(pq_tig)>0:
+                continue
+            print (pq_tig)
+            region = os.path.basename(pq_tig).split("_")[0]
+            print (region)
+            with open(pq_tig) as finp_pq_tig:
+                print (pq_tig)
+                pq_tig_lines = finp_pq_tig.read().strip().split("\n")
+            for pq_tig_line in pq_tig_lines:
+                print (pq_tig_line)
+                entries = pq_tig_line.strip().split('\t')
+                print (entries)
+                print (["entry",entries[0]])
+                print ("qrylen_dict",qrylen_dict)
+                qlen = qrylen_dict[entries[0]]
+                print (qlen)
+                print(f"{sample}\tpq\t{entries[0]}\t{entries[1]}\t{entries[2]}\t{qlen}\t{region}")
+                print (f'moddotplot/fasta/{sample}/{region}_pq_contig.fa')
+                print(f"{sample}\tpq\t{entries[0]}\t{entries[1]}\t{entries[2]}\t{qlen}\t{region}", file=fout)
+                print(pq_tig, file=haps)
 
-            for region in bed_df.index:
-                for line in open(input[f'{sample}_{region}_pq']):
-                    entries = line.strip().split('\t')
-                    qlen = qrylen_dict[entries[0]]
-                    print(f"{sample}\tpq\t{entries[0]}\t{entries[1]}\t{entries[2]}\t{qlen}\t{region}", file=fout)
-                    if os.path.exists(f'results/{region}/fasta/{sample}_pq_contig.fa'):
-                        print(f'{entries[3]}\tresults/{region}/fasta/{sample}_pq_contig.fa', file=haps)
+        for p_tig in input_p_tigs:
+            if not os.path.getsize(p_tig)>0:
+                continue
+            with open(p_tig) as finp_p_tig:
+                p_tig_lines = finp_p_tig.read().strip().split("\n")
+            for p_tig_line in p_tig_lines:
+                entries = p_tig_line.strip().split('\t')
+                qlen = qrylen_dict[entries[0]]
+                not_acro = False
+                for ele in qry_chrom_tracker[entries[0]]:
+                    if ele not in acros:
+                        not_acro = True
+                        break
+                if not not_acro:
+                    print(f"{sample}\tp\t{entries[0]}\t{entries[1]}\t{entries[2]}\t{qlen}\t{region}", file=fout)
 
-                for line in open(input[f'{sample}_{region}_p']):
-                    entries = line.strip().split('\t')
-                    qlen = qrylen_dict[entries[0]]
-                    not_acro = False
-                    for ele in qry_chrom_tracker[entries[0]]:
-                        if ele not in acros:
-                            not_acro = True
-                            break
-                    if not not_acro:
-                        print(f"{sample}\tp\t{entries[0]}\t{entries[1]}\t{entries[2]}\t{qlen}\t{region}", file=fout)
-
+        fout.close()
+        haps.close()
 
 rule tag_contigs:
     input:
@@ -217,7 +247,8 @@ rule tag_contigs:
     output:
         pq = "moddotplot/contigs/{sample}/{region}_pq_contig.bed",
         p = "moddotplot/contigs/{sample}/{region}_p_contig.bed",
-        aln = "moddotplot/contigs/{sample}/{region}_contig_aln.paf"
+        aln = "moddotplot/contigs/{sample}/{region}_contig_aln.paf",
+        flag = "moddotplot/contigs/{sample}/{region}_done"
     threads: 1,
     resources:
         mem=10,
@@ -334,6 +365,9 @@ rule tag_contigs:
             for arm, qry2arm_list in query2arm_dict.items():
                 for aln_info in qry2arm_list:
                     print(aln_info[-1], file=faln)
+
+        f_flag = open(output.flag, "w")
+        f_flag.close()
 
 
 rule get_pq_fa:
