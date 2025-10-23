@@ -39,69 +39,62 @@ conv_manifest_df.set_index("SAMPLE",inplace=True) ## shortened df using only SAM
 
 def get_all_inputs():
     inputs = [
-        expand(
-            "stats/seq_stats/{sample}.scaffold.stats",
+        expand("stats/seq_stats/{sample}.scaffold.stats",
             sample=conv_manifest_df.index.values,
         ),
-        expand(
-            "stats/seq_stats/{sample}.contig.stats",
+        expand("stats/seq_stats/{sample}.contig.stats",
             sample=conv_manifest_df.index.values,
         ),
-        expand(
-            "merqury/results/{asm}/{asm}.qv",
+        expand("merqury/results/{asm}/{asm}.qv",
             asm=full_manifest_df.index.values,
         ),
-        expand(
-            "saffire/{ref}/results/{sample}/alignments/{sample}.{aligner}.paf",
+        expand("saffire/{ref}/results/{sample}/alignments/{sample}.{aligner}.paf",
             ref=REF_DICT,
             sample=conv_manifest_df.index.values,
             aligner=ALIGNER,
         ),
-	expand(
-            "saffire/{ref}/results/{sample}/alignments/{sample}.{aligner}.bam",
+    	expand("saffire/{ref}/results/{sample}/alignments/{sample}.{aligner}.bam",
             ref=REF_DICT,
             sample=conv_manifest_df.index.values,
             aligner=ALIGNER,
         ),  
-        expand(
-            "saffire/{ref}/results/{sample}/beds/{sample}.{aligner}.bed",
+        expand("saffire/{ref}/results/{sample}/beds/{sample}.{aligner}.bed",
             ref=REF_DICT,
             sample=conv_manifest_df.index.values,
             aligner=ALIGNER,
         ),
-        expand(
-            rules.cpl_compleasm_run.output.summary,
+        expand("compleasm/results/{sample}/summary.txt",
             sample=conv_manifest_df.index.values,
         ),
-        expand(
-            "plots/contigs/{sample}.contig.scatter.log.png",
+        expand("plots/contigs/{sample}.contig.scatter.log.png",
             sample=conv_manifest_df.index.values,
         ),
-        expand(
-            "plots/ideo/{aligner}/{asm}_to_{ref}.ideoplot.pdf",
+        expand("plots/ideo/{aligner}/{asm}_to_{ref}.ideoplot.pdf",
             ref=REF_DICT,
             asm=full_manifest_df.index.values,
             aligner=ALIGNER,            
         ),
-        expand(
-            "saffire/{ref}/results/merged_paf/{aligner}/{asm}.concat.paf",
+        expand("saffire/{ref}/results/merged_paf/{aligner}/{asm}.concat.paf",
             ref=REF_DICT,
             asm=full_manifest_df.index.values,
             aligner=ALIGNER,
+        ),
+        expand("stats/acro_stats/{sample}.generated_acros.tsv",
+            sample=conv_manifest_df.index.values,
+        ),
+        expand("moddotplot/liftover/stats/{sample}/lifted_contigs.tsv",
+            sample=conv_manifest_df.index.values,
         )
-        
     ]
 
-    ploidy_inputs = expand(
-        "plots/ploidy/CHM13/{aligner}/{asm}.ploidy.pdf",
+    ploidy_inputs = expand("plots/ploidy/CHM13/{aligner}/{asm}.ploidy.pdf",
         asm=[
             asm for asm in full_manifest_df.index.values
             if not pd.isna(full_manifest_df.at[asm, "H2"])
         ],
         aligner=ALIGNER,
     )
-    moddot_inputs = expand(
-        "stats/acro_stats/{sample}.generated_acros.tsv",
+    moddot_inputs = expand("stats/acro_stats/{sample}.generated_acros.tsv",
         sample=conv_manifest_df.index.values,
     )
 
@@ -114,20 +107,17 @@ def get_all_inputs():
 def get_plot_inputs():
     inputs = [
 
-        expand(
-            "plots/ideo/{aligner}/{asm}_to_{ref}.ideoplot.pdf",
+        expand("plots/ideo/{aligner}/{asm}_to_{ref}.ideoplot.pdf",
             ref=REF_DICT,
             asm=full_manifest_df.index.values,
             aligner=ALIGNER,
         ),
-        expand(
-            "plots/contigs/{sample}.contig.scatter.log.png",
+        expand("plots/contigs/{sample}.contig.scatter.log.png",
             sample=conv_manifest_df.index.values,
         ),
     ]
 
-    ploidy_inputs = expand(
-        "plots/ploidy/CHM13/{aligner}/{asm}.ploidy.pdf",
+    ploidy_inputs = expand("plots/ploidy/CHM13/{aligner}/{asm}.ploidy.pdf",
         asm=[
             asm for asm in full_manifest_df.index.values
             if not pd.isna(full_manifest_df.at[asm, "H2"])
@@ -135,10 +125,14 @@ def get_plot_inputs():
         aligner=ALIGNER,
     )
 
-    moddot_inputs = expand(
-        "stats/acro_stats/{sample}.generated_acros.tsv",
-        sample=conv_manifest_df.index.values,
-    )
+    moddot_inputs = [
+        expand("stats/acro_stats/{sample}.generated_acros.tsv",
+            sample=conv_manifest_df.index.values,
+        ),
+        expand("moddotplot/liftover/stats/{sample}/lifted_contigs.tsv",
+            sample=conv_manifest_df.index.values,
+        )
+    ]
 
     if int(TAXID) == 9606: # human
         inputs.extend(ploidy_inputs)    
@@ -212,8 +206,7 @@ rule all:
 
 rule get_saf:
     input:
-        expand(
-            "saffire/{ref}/results/{sample}/saff/{sample}.{aligner}.saf",
+        expand("saffire/{ref}/results/{sample}/saff/{sample}.{aligner}.saf",
             ref=REF_DICT,
             sample=conv_manifest_df.index.values,
             aligner=ALIGNER,
@@ -221,22 +214,19 @@ rule get_saf:
 
 rule get_compleasm:
     input:
-        expand(
-            rules.cpl_compleasm_run.output.summary,
+        expand("compleasm/results/{sample}/summary.txt",
             sample=conv_manifest_df.index.values,
         ),
 
 rule get_cleaned_fasta:
     input:
-        expand(
-            "fcs_cleaned_fasta/{sample}/{sample}.fasta",
+        expand("fcs_cleaned_fasta/{sample}/{sample}.fasta",
             sample=conv_manifest_df.index.values,
         ),    
 
 rule get_qv:
     input:
-        expand(            
-            "merqury/results/{asm}/{asm}.qv",
+        expand("merqury/results/{asm}/{asm}.qv",
             asm=full_manifest_df.index.values,
         ),
 
@@ -246,11 +236,9 @@ rule get_plots:
 
 rule get_stats:
     input:
-        expand(
-            "stats/seq_stats/{sample}.scaffold.stats",
+        expand("stats/seq_stats/{sample}.scaffold.stats",
             sample=conv_manifest_df.index.values,
         ),
-        expand(
-            "stats/seq_stats/{sample}.contig.stats",
+        expand("stats/seq_stats/{sample}.contig.stats",
             sample=conv_manifest_df.index.values,
         ),

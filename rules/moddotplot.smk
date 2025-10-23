@@ -1,5 +1,5 @@
 """
-Adopted from liftover_acro_parm.smk created by Jiadong Lin
+Adopted from acro_parm.smk created by Jiadong Lin
 """
 
 import os
@@ -160,10 +160,11 @@ rule paf_stats:
 
 rule group_tigs:
     input:
-        tigs = unpack(find_tigs),
+        unpack(find_tigs),
         paf = "saffire/CHM13/results/{sample}/alignments/{sample}.minimap2.paf",
     output:
         tigs = "moddotplot/liftover/stats/{sample}/lifted_contigs.tsv",
+        tab = "moddotplot/liftover/stats/{sample}/lifted_contigs.tab"
     threads: 1
     resources:
         mem=10,
@@ -172,13 +173,15 @@ rule group_tigs:
 
     run:
         acros = ['chr13', 'chr14', 'chr15', 'chr21', 'chr22']
-
         fout = open(output.tigs, 'w')
-        print('Sample\tArm\tTig\tTig_start\tTig_end\tSize\tChrom', file=fout)
+        print('Sample\tArm\tTig\tTig_start\tTig_end\tSize\tChrom',file=fout)
+        haps = open(output.tab, 'w')
+        print('SAMPLE\tHAP', file=haps)
+
         for sample in manifest_df.index:
             qry_chrom_tracker = {}
             qrylen_dict = {}
-            with open(input.paf) as f:
+            with open(f'results/asm_to_chm13/{sample}.paf') as f:
                 for line in f:
                     query, query_len, query_start, query_end, strand, target, target_len, target_start, target_end, num_matches, alignment_len = line.strip().split("\t")[:11]
                     qrylen_dict[query] = query_len
@@ -189,12 +192,14 @@ rule group_tigs:
                     qry_chrom_tracker[query].append(target)
 
             for region in bed_df.index:
-                for line in open(input.tigs[f'{sample}_{region}_pq']):
+                for line in open(input[f'{sample}_{region}_pq']):
                     entries = line.strip().split('\t')
                     qlen = qrylen_dict[entries[0]]
                     print(f"{sample}\tpq\t{entries[0]}\t{entries[1]}\t{entries[2]}\t{qlen}\t{region}", file=fout)
+                    if os.path.exists(f'results/{region}/fasta/{sample}_pq_contig.fa'):
+                        print(f'{entries[3]}\tresults/{region}/fasta/{sample}_pq_contig.fa', file=haps)
 
-                for line in open(input.tigs[f'{sample}_{region}_p']):
+                for line in open(input[f'{sample}_{region}_p']):
                     entries = line.strip().split('\t')
                     qlen = qrylen_dict[entries[0]]
                     not_acro = False
@@ -270,21 +275,22 @@ rule tag_contigs:
                     qry_chrom_tracker[query] = []
                 qry_chrom_tracker[query].append(target)
 
-
-                if int(alignment_len) < 200000:
+                # if int(alignment_len) < 200000:
+                if int(alignment_len) <= 100000 or iden < 90:
                     continue
                 if query not in query2target2info_dict:
                     query2target2info_dict[query] = {'p': [], 'q': []}
 
-                if target_end - 1000000 >= centro_dict[target]['q'][1]:
+                if target_end - 1000000 >= centro_dict[target]['q'][1] and int(alignment_len) > 1000000:
                     arm = 'q'
                     query2target2info_dict[query][arm].append((
-                    (query_start, query_end), strand, (target_start, target_end), num_matches, alignment_len, iden,
+                    (query_start, query_end), strand, (target_start, target_end), target, num_matches, alignment_len, iden,
                     line.strip()))
-                elif target_end <= centro_dict[target]['p'][0]:
+
+                if target_start <= centro_dict[target]['p'][1]:
                     arm = 'p'
                     query2target2info_dict[query][arm].append((
-                    (query_start, query_end), strand, (target_start, target_end), num_matches, alignment_len, iden,
+                    (query_start, query_end), strand, (target_start, target_end), target, num_matches, alignment_len, iden,
                     line.strip()))
 
 
@@ -301,21 +307,29 @@ rule tag_contigs:
                 distal_aln = sorted(query2arm_dict['q'],key=lambda x: (x[2][0], x[2][1]), reverse=True)[0]
                 qry_seq_start = 1
                 qry_seq_end = distal_aln[0][1]
+                target_chrom = distal_aln[3]
                 if distal_aln[1] == '-':
                     qry_seq_start = distal_aln[0][0]
                     qry_seq_end = query_len
-                print(f'{query}\t{qry_seq_start}\t{qry_seq_end}\t{query}',file=fout_pq)
-                pq_contig_tracker.append(query)
+                # print(f'{query}\t{qry_seq_start}\t{qry_seq_end}\t{query}',file=fout_pq)
+                ## used for Arang's annotated assembly
+                new_query = query.split('_')[1] + '_' + query.split('_')[0] if len(query.split('_')) > 1 else f'{query}_{target_chrom}'
+                print(f'{query}\t{qry_seq_start}\t{qry_seq_end}\t{wildcards.sample}_{new_query}',file=fout_pq)
+                # pq_contig_tracker.append(query)
 
             ## contig only aligned to p arm
             if len(query2arm_dict['p']) > 0 and len(query2arm_dict['q']) == 0:
                 distal_aln = sorted(query2arm_dict['p'],key=lambda x: (x[2][0], x[2][1]), reverse=True)[0]
                 qry_seq_start = 1
                 qry_seq_end = distal_aln[0][1]
+                target_chrom = distal_aln[3]
                 if distal_aln[1] == '-':
                     qry_seq_start = distal_aln[0][0]
                     qry_seq_end = query_len
-                print(f'{query}\t{qry_seq_start}\t{qry_seq_end}\t{query}',file=fout_p)
+                # print(f'{query}\t{qry_seq_start}\t{qry_seq_end}\t{wildcards.sample}_{query}_{target_chrom}',file=fout_p)
+                ## used for Arang's annotated assembly
+                new_query = query.split('_')[1] + '_' + query.split('_')[0] if len(query.split('_')) > 1 else f'{query}_{target_chrom}'
+                print(f'{query}\t{qry_seq_start}\t{qry_seq_end}\t{wildcards.sample}_{new_query}',file=fout_p)
 
             for arm, qry2arm_list in query2arm_dict.items():
                 for aln_info in qry2arm_list:
@@ -359,7 +373,7 @@ rule get_pq_fa:
 rule pq_selfplot:
     input:
         bed = "moddotplot/contigs/{sample}/{region}_pq_contig.bed",
-        fa = "moddotplot/fasta/{sample}/{region}_pq_contig.fa"
+        fa = "moddotplot/fasta/{sample}/{region}_pq_contig.fa",
     output:
         flag = "moddotplot/results/{sample}/.{region}.done"
     resources:
