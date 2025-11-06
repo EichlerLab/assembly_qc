@@ -245,16 +245,18 @@ rule tag_contigs:
     input:
         paf = "moddotplot/liftover/paf/{sample}/{region}.trimmed.paf"
     output:
+        flag = "moddotplot/contigs/{sample}/.{region}_done"
+    params:
         pq = "moddotplot/contigs/{sample}/{region}_pq_contig.bed",
         p = "moddotplot/contigs/{sample}/{region}_p_contig.bed",
         aln = "moddotplot/contigs/{sample}/{region}_contig_aln.paf",
-        flag = "moddotplot/contigs/{sample}/{region}_done"
     threads: 1,
     resources:
         mem=10,
         hrs=24,
         disk_free=1
     run:
+        os.makedirs(f"moddotplot/contigs/{wildcards.sample}", exist_ok=True)
         centro_dict = {
                 'chr13': {
                     'p' : (15547593, 16522942),
@@ -280,103 +282,111 @@ rule tag_contigs:
 
         seq2len_dict = {}
         query2target2info_dict = {}
-        ref_tag = wildcards.region.split('_')[0]
-        sample_name = wildcards.sample.split('_')[0]
         qry_chrom_tracker = {}
         with open(input.paf) as f:
             for line in f:
-                query, query_len, query_start, query_end, strand, target, target_len, target_start, target_end, num_matches, alignment_len = line.strip().split("\t")[:11]
+                try:
+                    query, query_len, query_start, query_end, strand, target, target_len, target_start, target_end, num_matches, alignment_len = line.strip().split("\t")[:11]
 
-                cg = [i.split(":")[-1] for i in line.strip().split("\t")[12:] if i[:2] == 'cg'][0]
-                cg_tuple = cigar_tuple(cg)
-                iden = round((sum([int(i[0]) for i in cg_tuple if i[1] == '=' or i[1] == 'M']) / sum(
-                    [int(i[0]) for i in cg_tuple if i[1] in {'=', 'M', 'X', 'D', 'I'}])) * 100,2)
+                    cg = [i.split(":")[-1] for i in line.strip().split("\t")[12:] if i[:2] == 'cg'][0]
+                    cg_tuple = cigar_tuple(cg)
+                    iden = round((sum([int(i[0]) for i in cg_tuple if i[1] == '=' or i[1] == 'M']) / sum(
+                        [int(i[0]) for i in cg_tuple if i[1] in {'=', 'M', 'X', 'D', 'I'}])) * 100,2)
 
-                query_len = int(query_len)
-                query_start = int(query_start)
-                query_end = int(query_end)
-                target_len = int(target_len)
-                target_start = int(target_start)
-                target_end = int(target_end)
+                    query_len = int(query_len)
+                    query_start = int(query_start)
+                    query_end = int(query_end)
+                    target_len = int(target_len)
+                    target_start = int(target_start)
+                    target_end = int(target_end)
 
-                seq2len_dict[query] = query_len
-                seq2len_dict[target] = target_len
+                    seq2len_dict[query] = query_len
+                    seq2len_dict[target] = target_len
 
-                if query not in qry_chrom_tracker:
-                    qry_chrom_tracker[query] = []
-                qry_chrom_tracker[query].append(target)
+                    if query not in qry_chrom_tracker:
+                        qry_chrom_tracker[query] = []
+                    qry_chrom_tracker[query].append(target)
 
-                # if int(alignment_len) < 200000:
-                if int(alignment_len) <= 100000 or iden < 90:
+                    # if int(alignment_len) < 200000:
+                    if int(alignment_len) <= 100000 or iden < 90:
+                        continue
+                    if query not in query2target2info_dict:
+                        query2target2info_dict[query] = {'p': [], 'q': []}
+
+                    if target_end - 1000000 >= centro_dict[target]['q'][1] and int(alignment_len) > 1000000:
+                        arm = 'q'
+                        query2target2info_dict[query][arm].append((
+                        (query_start, query_end), strand, (target_start, target_end), target, num_matches, alignment_len, iden,
+                        line.strip()))
+
+                    if target_start <= centro_dict[target]['p'][1]:
+                        arm = 'p'
+                        query2target2info_dict[query][arm].append((
+                        (query_start, query_end), strand, (target_start, target_end), target, num_matches, alignment_len, iden,
+                        line.strip()))
+                except:
                     continue
-                if query not in query2target2info_dict:
-                    query2target2info_dict[query] = {'p': [], 'q': []}
-
-                if target_end - 1000000 >= centro_dict[target]['q'][1] and int(alignment_len) > 1000000:
-                    arm = 'q'
-                    query2target2info_dict[query][arm].append((
-                    (query_start, query_end), strand, (target_start, target_end), target, num_matches, alignment_len, iden,
-                    line.strip()))
-
-                if target_start <= centro_dict[target]['p'][1]:
-                    arm = 'p'
-                    query2target2info_dict[query][arm].append((
-                    (query_start, query_end), strand, (target_start, target_end), target, num_matches, alignment_len, iden,
-                    line.strip()))
 
 
         query2arm2target2info_dict = {}
 
-        fout_pq = open(output.pq,'w')
-        fout_p = open(output.p, 'w')
-        faln = open(output.aln, 'w')
+        fout_pq = open(params.pq,'w')
+        fout_p = open(params.p, 'w')
+        faln = open(params.aln, 'w')
         pq_contig_tracker = []
         for query, query2arm_dict in query2target2info_dict.items():
-            query_len = seq2len_dict[query]
-            ## contigs aligned to both p and q arm
-            if len(query2arm_dict['p']) > 0 and len(query2arm_dict['q']) > 0:
-                distal_aln = sorted(query2arm_dict['q'],key=lambda x: (x[2][0], x[2][1]), reverse=True)[0]
-                qry_seq_start = 1
-                qry_seq_end = distal_aln[0][1]
-                target_chrom = distal_aln[3]
-                if distal_aln[1] == '-':
-                    qry_seq_start = distal_aln[0][0]
-                    qry_seq_end = query_len
-                # print(f'{query}\t{qry_seq_start}\t{qry_seq_end}\t{query}',file=fout_pq)
-                ## used for Arang's annotated assembly
-                new_query = query.split('_')[1] + '_' + query.split('_')[0] if len(query.split('_')) > 1 else f'{query}_{target_chrom}'
-                print(f'{query}\t{qry_seq_start}\t{qry_seq_end}\t{wildcards.sample}_{new_query}',file=fout_pq)
-                # pq_contig_tracker.append(query)
+            try:
+                query_len = seq2len_dict[query]
+                ## contigs aligned to both p and q arm
+                if len(query2arm_dict['p']) > 0 and len(query2arm_dict['q']) > 0:
+                    distal_aln = sorted(query2arm_dict['q'],key=lambda x: (x[2][0], x[2][1]), reverse=True)[0]
+                    qry_seq_start = 1
+                    qry_seq_end = distal_aln[0][1]
+                    target_chrom = distal_aln[3]
+                    if distal_aln[1] == '-':
+                        qry_seq_start = distal_aln[0][0]
+                        qry_seq_end = query_len
+                    # print(f'{query}\t{qry_seq_start}\t{qry_seq_end}\t{query}',file=fout_pq)
+                    ## used for Arang's annotated assembly
+                    new_query = query.split('_')[1] + '_' + query.split('_')[0] if len(query.split('_')) > 1 else f'{query}_{target_chrom}'
+                    print(f'{query}\t{qry_seq_start}\t{qry_seq_end}\t{wildcards.sample}_{new_query}',file=fout_pq)
+                    # pq_contig_tracker.append(query)
 
-            ## contig only aligned to p arm
-            if len(query2arm_dict['p']) > 0 and len(query2arm_dict['q']) == 0:
-                distal_aln = sorted(query2arm_dict['p'],key=lambda x: (x[2][0], x[2][1]), reverse=True)[0]
-                qry_seq_start = 1
-                qry_seq_end = distal_aln[0][1]
-                target_chrom = distal_aln[3]
-                if distal_aln[1] == '-':
-                    qry_seq_start = distal_aln[0][0]
-                    qry_seq_end = query_len
-                # print(f'{query}\t{qry_seq_start}\t{qry_seq_end}\t{wildcards.sample}_{query}_{target_chrom}',file=fout_p)
-                ## used for Arang's annotated assembly
-                new_query = query.split('_')[1] + '_' + query.split('_')[0] if len(query.split('_')) > 1 else f'{query}_{target_chrom}'
-                print(f'{query}\t{qry_seq_start}\t{qry_seq_end}\t{wildcards.sample}_{new_query}',file=fout_p)
+                ## contig only aligned to p arm
+                if len(query2arm_dict['p']) > 0 and len(query2arm_dict['q']) == 0:
+                    distal_aln = sorted(query2arm_dict['p'],key=lambda x: (x[2][0], x[2][1]), reverse=True)[0]
+                    qry_seq_start = 1
+                    qry_seq_end = distal_aln[0][1]
+                    target_chrom = distal_aln[3]
+                    if distal_aln[1] == '-':
+                        qry_seq_start = distal_aln[0][0]
+                        qry_seq_end = query_len
+                    # print(f'{query}\t{qry_seq_start}\t{qry_seq_end}\t{wildcards.sample}_{query}_{target_chrom}',file=fout_p)
+                    ## used for Arang's annotated assembly
+                    new_query = query.split('_')[1] + '_' + query.split('_')[0] if len(query.split('_')) > 1 else f'{query}_{target_chrom}'
+                    print(f'{query}\t{qry_seq_start}\t{qry_seq_end}\t{wildcards.sample}_{new_query}',file=fout_p)
 
-            for arm, qry2arm_list in query2arm_dict.items():
-                for aln_info in qry2arm_list:
-                    print(aln_info[-1], file=faln)
+                for arm, qry2arm_list in query2arm_dict.items():
+                    for aln_info in qry2arm_list:
+                        print(aln_info[-1], file=faln)
+            except:
+                continue
 
-        f_flag = open(output.flag, "w")
-        f_flag.close()
-
+        fout_pq.close()
+        fout_p.close()
+        faln.close()
+        
+        with open(str(output.flag), "w") as f_flag:
+            print(f"{wildcards.sample}:{wildcards.region} Done.", file=f_flag)
 
 rule get_pq_fa:
     input:
-        bed="moddotplot/contigs/{sample}/{region}_pq_contig.bed",
+        flag = "moddotplot/contigs/{sample}/.{region}_done",
         hap = "fcs_cleaned_fasta/{sample}/{sample}.fasta"
     output:
         fa = "moddotplot/fasta/{sample}/{region}_pq_contig.fa",
     params:
+        bed="moddotplot/contigs/{sample}/{region}_pq_contig.bed",
         region_name = get_region_name        
     resources:
         mem=10,
@@ -384,7 +394,7 @@ rule get_pq_fa:
         disk_free=1,
     threads: 1
     run:
-        input_bed = input.bed
+        input_bed = params.bed
         input_hap = pysam.FastaFile(input.hap)
         output_fa = output.fa
         region_name = params.region_name
@@ -406,10 +416,12 @@ rule get_pq_fa:
 
 rule pq_selfplot:
     input:
-        bed = "moddotplot/contigs/{sample}/{region}_pq_contig.bed",
+        flag = "moddotplot/contigs/{sample}/.{region}_done",
         fa = "moddotplot/fasta/{sample}/{region}_pq_contig.fa",
     output:
         flag = "moddotplot/results/{sample}/.{region}.done"
+    params:
+        bed = "moddotplot/contigs/{sample}/{region}_pq_contig.bed",
     resources:
         mem=10,
         hrs=24,
@@ -418,10 +430,10 @@ rule pq_selfplot:
     singularity:
         "docker://eichlerlab/moddotplot:0.9.0"
     shell: """
-        if [ -s {input.bed} ]; then
-            moddotplot static -f {input.fa} --no-hist --no-bed -o $( dirname {output.flag} )
-            touch {output.flag}
+        if [ -s {params.bed} ]; then
+            moddotplot static -f {input.fa} --no-hist --no-bed -o $( dirname {output.flag})
+            echo "{wildcards.sample} {wildcards.region}" > {output.flag}
         else
-            touch {output.flag}
+            echo "{wildcards.sample} {wildcards.region}" > {output.flag}
         fi
         """

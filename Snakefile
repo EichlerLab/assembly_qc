@@ -222,7 +222,10 @@ rule get_cleaned_fasta:
     input:
         expand("fcs_cleaned_fasta/{sample}/{sample}.fasta",
             sample=conv_manifest_df.index.values,
-        ),    
+        ),
+        expand("contamination_screening/results/{sample}/fasta/{sample}-mito.fasta",
+            sample=conv_manifest_df.index.values,
+        )
 
 rule get_qv:
     input:

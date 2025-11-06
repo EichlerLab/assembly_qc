@@ -265,7 +265,7 @@ rule extract_mito:
             open(output.mito_fasta, "w").close()
             return
 
-        mito_df.loc[:, "strand"] = mito_df.apply(lambda row: "+" if row["qstart_blast"] < row["qend_blast"] else "-", axis=1)
+        mito_df.loc[:, "strand"] = mito_df.apply(lambda row: "+" if row["sstart"] < row["send"] else "-", axis=1) # bug fixed. q{start|end}_blast -> s{start|end}
         mito_df["qstart"] = mito_df[["qstart_blast","qend_blast"]].min(axis=1)
         mito_df["qend"] = mito_df[["qstart_blast","qend_blast"]].max(axis=1)
         mito_df["qstart_bed"] = mito_df["qstart"] - 1
