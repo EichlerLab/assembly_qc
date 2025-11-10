@@ -245,7 +245,7 @@ rule tag_contigs:
     input:
         paf = "moddotplot/liftover/paf/{sample}/{region}.trimmed.paf"
     output:
-        flag = "moddotplot/contigs/{sample}/.{region}_done"
+        flag = "results/{asm}/moddotplot/work/flags/{sample}/{region}.pq_contig.done"
     params:
         pq = "moddotplot/contigs/{sample}/{region}_pq_contig.bed",
         p = "moddotplot/contigs/{sample}/{region}_p_contig.bed",
@@ -381,10 +381,10 @@ rule tag_contigs:
 
 rule get_pq_fa:
     input:
-        flag = "moddotplot/contigs/{sample}/.{region}_done",
-        hap = "fcs_cleaned_fasta/{sample}/{sample}.fasta"
+        flag = rules.tag_contigs.output.flag,
+        hap = "results/{asm}/fcs/outputs/{sample}.fasta"
     output:
-        fa = "moddotplot/fasta/{sample}/{region}_pq_contig.fa",
+        fa = "results/{asm}/moddotplot/work/fasta_files/{sample}/{region}.pq_contig.fa",
     params:
         bed="moddotplot/contigs/{sample}/{region}_pq_contig.bed",
         region_name = get_region_name        
@@ -416,12 +416,12 @@ rule get_pq_fa:
 
 rule pq_selfplot:
     input:
-        flag = "moddotplot/contigs/{sample}/.{region}_done",
-        fa = "moddotplot/fasta/{sample}/{region}_pq_contig.fa",
+        flag = "results/{asm}/moddotplot/work/flags/{sample}/{region}.pq_contig.done",
+        fa = rules.get_pq_fa.output.fa,
     output:
-        flag = "moddotplot/results/{sample}/.{region}.done"
+        flag = "results/{asm}/moddotplot/work/flags/{sample}/{region}.moddotplot.done"
     params:
-        bed = "moddotplot/contigs/{sample}/{region}_pq_contig.bed",
+        bed = "results/{asm}/moddotplot/work/bed_files/{sample}/{region}.pq_contig.bed",
     resources:
         mem=10,
         hrs=24,
@@ -430,8 +430,12 @@ rule pq_selfplot:
     singularity:
         "docker://eichlerlab/moddotplot:0.9.0"
     shell: """
-        if [ -s {params.bed} ]; then
-            moddotplot static -f {input.fa} --no-hist --no-bed -o $( dirname {output.flag})
+        outdir=$(dirname {output.flag} | sed 's/work\/flags/outputs/g')
+        if [[ ! -d $outdir ]];then
+            mkdir -p $outdir
+        fi
+        if [[ -s {params.bed} ]]; then
+            moddotplot static -f {input.fa} --no-hist --no-bed -o $outdir
             echo "{wildcards.sample} {wildcards.region}" > {output.flag}
         else
             echo "{wildcards.sample} {wildcards.region}" > {output.flag}
