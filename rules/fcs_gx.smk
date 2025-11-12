@@ -33,6 +33,7 @@ def find_gx_report(wildcards):
         gx_name=IDS,
     )
 
+
 wildcard_constraints:
     sample = "|".join(sample_list),
     sub = "|".join(["gx", "adaptor"]),

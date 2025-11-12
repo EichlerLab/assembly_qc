@@ -7,23 +7,28 @@ wildcard_constraints:
     read="\d+",
 
 
+
 def find_cleaned_hap_fasta(which_one):
     def inner(wildcards):
+        try:
+            h2_val = full_manifest_df.at[wildcards.sample, "H2"]
+        except KeyError:
+            h2_val = None 
+
+        has_h2 = isinstance(h2_val, str) and h2_val.strip() != "" and os.path.isfile(h2_val)
+
         if which_one == "all":
-            if not os.path.isfile(full_manifest_df.at[wildcards.sample, "H2"]):
-                haps = ["hap1"]
-            else:
-                haps = ["hap1","hap2"]
-        elif which_one in ["hap1","hap2","un"]:
+            haps = ["hap1", "hap2"] if has_h2 else ["hap1"]
+        elif which_one in {"hap1", "hap2", "un"}:
             haps = [which_one]
         else:
-            print (f"input type {which_one} is not available.")
-            sys.exit(1)
-        outputs = [ f"results/{wildcards.sample}/contamination_screening/outputs/final_fasta/{wildcards.sample}_{hap}.fasta" for hap in haps ]
-        if len(outputs) == 1:
-            return outputs[0]
-        else:
-            return outputs
+            raise ValueError(f"input type {which_one} is not available.")
+
+        outputs = [
+            f"results/{wildcards.sample}/contamination_screening/outputs/final_fasta/{wildcards.sample}_{hap}.fasta"
+            for hap in haps
+        ]
+        return outputs[0] if len(outputs) == 1 else outputs
     return inner
 
 
@@ -190,16 +195,17 @@ rule merqury_run:
     input:
         run_script=rules.merqury_script.output.run_script,
     output:
-        png="results/{sample}/merqury/outputs/{sample}.qv",
+        qv="results/{sample}/merqury/outputs/{sample}.qv",
     resources:
         mem=lambda wildcards, attempt: (2 ** (attempt-1)) * 4,
         hrs=96,
     threads: 16
     singularity:
         "docker://eichlerlab/merqury:1.3.1"
-    shell:
-        """
-        pushd merqury/results/{wildcards.sample}/; ./$( basename {input.run_script} ); popd
+    shell: """ 
+        outdir="$(dirname {output.qv})"
+        mkdir -p $outdir
+        pushd $outdir; $(realpath {input.run_script}); popd
         """
 
 
@@ -216,10 +222,12 @@ rule hapmers:
     threads: 8
     singularity:
         "docker://eichlerlab/merqury:1.3.1"
-    shell:
-        """
-        pushd $( dirname {output.inherited_hist} )
-        $( dirname $( which merqury.sh ) )/trio/hapmers.sh ../../../{input.mat_meryl} ../../../{input.pat_meryl} ../../../{input.sample_meryl}
+    shell: """
+        currdir=$(pwd)
+        outdir=$(dirname {output.inherited_hist})
+        mkdir -p $outdir
+        pushd $outdir
+        $( dirname $( which merqury.sh ) )/trio/hapmers.sh $currdir/{input.mat_meryl} $currdir/{input.pat_meryl} $currdir/{input.sample_meryl}
         popd
         """
 
@@ -252,7 +260,7 @@ rule merqury_trio_script:
         )
         out_sample_name = "_".join([wildcards.sample, "trio"])
         with open(output.run_script, "w") as outfile:
-            outfile.write("#!/bin/bash \n")
+            outfile.write("#!/usr/bin/env bash \n")
             outfile.write(f"merqury.sh {meryl_all} {sample_all} {out_sample_name}\n")
         os.chmod(output.run_script, 0o755)
 
@@ -268,7 +276,8 @@ rule merqury_trio_run:
     threads: 16
     singularity:
         "docker://eichlerlab/merqury:1.3.1"
-    shell:
-        """
-        pushd merqury/results/{wildcards.sample}/trio; ./$( basename {input.run_script} ); popd
-        """
+    shell: """
+        outdir="$(dirname {output.png})"
+        mkdir -p $outdir
+        pushd $outdir; $(realpath {input.run_script}); popd
+        """ 

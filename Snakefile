@@ -16,6 +16,8 @@ TAXID = config.get("TAXID", "9606")
 REF_DICT = config["REF"]
 ALIGNER = config.get('ALIGNER',"minimap2")
 
+## functions =========
+
 def get_asm_manifest_df(manifest_df):
     add_haps = {"H2": "hap2", "UNASSIGNED": "un"}
     rows = []
@@ -28,37 +30,127 @@ def get_asm_manifest_df(manifest_df):
     return pd.DataFrame(rows)
 
 
-full_manifest_df = pd.read_csv(MANIFEST, header=0, sep='\t', comment='#', na_values=["","NA","na","N/A"]) ## manifest df for merqury including sample, h1, h2, etc..
-conv_manifest_df = get_asm_manifest_df(full_manifest_df) ## shortened df using only HAP / FASTA fields
+def get_fcs_final_outputs(wildcards):
+    sample = wildcards.sample
+    sample_sub = groups[groups["SAMPLE"] == sample]
+    return [
+        f"results/{sample}/contamination_screening/outputs/final_fasta/{sample}_{row.HAP}.fasta"
+        for idx, row in sample_sub.iterrows()
+    ] + [
+        f"results/{sample}/contamination_screening/outputs/mito_fasta/{row.HAP}-mt.fasta"
+        for idx, row in sample_sub.iterrows()
+    ]
 
+def get_merqury_final_outputs(wildcards):
+    sample = wildcards.sample
+    trio_result = find_trios(wildcards)
+    if len(trio_result) > 0:
+        return [f"results/{sample}/merqury/outputs/{sample}.qv"]+trio_result
+    else:
+        return f"results/{sample}/merqury/outputs/{sample}.qv"
+
+
+def get_saffire_final_outputs(wildcards):
+    sample = wildcards.sample
+    sample_sub = groups[groups["SAMPLE"] == sample]
+    final_outputs = [
+        f"results/{sample}/saffire/outputs/safs/{ref}/{row.HAP}.{aligner}.saf"
+        for idx, row in sample_sub.iterrows()
+        for ref in REF_DICT
+        for aligner in ALIGNER
+    ] + [
+        f"results/{sample}/saffire/outputs/chrom_cov/{ref}/{row.HAP}.{aligner}.chrom_cov.tsv"
+        for idx, row in sample_sub.iterrows()
+        for ref in REF_DICT
+        for aligner in ALIGNER
+    ]
+    return final_outputs
+
+## ==================
+
+
+
+full_manifest_df = pd.read_csv(
+    MANIFEST, header=0, sep="\t", comment="#",
+    na_values=["", "NA", "na", "N/A"]
+)
+
+
+conv_manifest_df = get_asm_manifest_df(full_manifest_df)
 sample_list = sorted(full_manifest_df["SAMPLE"].astype(str).unique())
-
-full_manifest_df.set_index("SAMPLE",inplace=True) 
+full_manifest_df.set_index("SAMPLE", inplace=True)
+samples_with_asm = [
+    s for s in full_manifest_df.index
+    if pd.notna(full_manifest_df.at[s, "H1"]) and str(full_manifest_df.at[s, "H1"]).strip()
+]
 
 groups = conv_manifest_df[["SAMPLE","HAP"]].drop_duplicates().copy()
+conv_manifest_df.set_index(["SAMPLE","HAP"], inplace=True)
 
-conv_manifest_df.set_index(["SAMPLE","HAP"],inplace=True)
 
 wildcard_constraints:
-    sample = "|".join(sample_list)
+    sample = "|".join(sample_list),
+    hap = "|".join(["hap1","hap2","un"]),
+    aligner = "|".join(["minimap2"])
 
-include: "functions/common.smk"
+localrules: all, gather_outputs_per_sample
+
+rule all:
+    input:
+        expand("results/{sample}/outputs/all_done",
+            sample=samples_with_asm
+        )
+
+
+rule gather_outputs_per_sample:
+    input:
+        get_fcs_final_outputs,
+        get_merqury_final_outputs,
+        get_saffire_final_outputs
+    output:
+        flag = touch("results/{sample}/outputs/all_done")
+
+
+##===include MUST BE HERE.
+
 include: "rules/fcs_gx.smk"
 include: "rules/merqury.smk"
+include: "rules/saffire.smk"
+
+##=========================
 
 
-print (full_manifest_df.loc[full_manifest_df["H1"] != "NA"].index)
 
-# localrules: all, gather_outputs_per_sample
+# full_manifest_df = pd.read_csv(MANIFEST, header=0, sep='\t', comment='#', na_values=["","NA","na","N/A"]) ## manifest df for merqury including sample, h1, h2, etc..
+# conv_manifest_df = get_asm_manifest_df(full_manifest_df) ## shortened df using only HAP / FASTA fields
+
+# sample_list = sorted(full_manifest_df["SAMPLE"].astype(str).unique())
+
+# full_manifest_df.set_index("SAMPLE",inplace=True) 
+
+# groups = conv_manifest_df[["SAMPLE","HAP"]].drop_duplicates().copy()
+
+# conv_manifest_df.set_index(["SAMPLE","HAP"],inplace=True)
+
+# wildcard_constraints:
+#     sample = "|".join(sample_list)
+
+# include: "rules/fcs_gx.smk"
+# include: "rules/merqury.smk"
+
+# print (full_manifest_df["H1"])
+# print (full_manifest_df.loc[~full_manifest_df["H1"].isna()].index)
+
 
 # print ("GROUP")
 # print (groups)
 
+# localrules: all, gather_outputs_per_sample
 
 # rule all:
 #     input:
 #         expand("results/{sample}/outputs/all_done",
-#             sample = full_manifest_df.index
+#             sample = full_manifest_df.loc[~full_manifest_df["H1"].isna()].index
 #         )
 
 # rule gather_outputs_per_sample:
@@ -69,28 +161,6 @@ print (full_manifest_df.loc[full_manifest_df["H1"] != "NA"].index)
 #     output:
 #         flag = touch("results/{sample}/outputs/all_done")
 
-# rule all:
-#     input:
-#         expand(
-#             "results/{sample}/merqury/outputs/{sample}.qv",
-#             sample = full_manifest_df.loc[full_manifest_df["H1"] != "NA"].index,
-#         ),
-#         expand(
-#             "results/{sample}/saffire/outputs/chrom_cov/{ref}/{hap}.{aligner}.chrom_cov.tsv",
-#             zip,
-#             sample = groups["SAMPLE"].tolist(),
-#             hap    = groups["HAP"].tolist(),
-#             ref = REFDICT,
-#             alginer = ALIGNER
-#         ),
-#         expand("results/{sample}/saffire/outputs/safs/{ref}/{hap}.{aligner}.saf",
-#             zip,
-#             sample = groups["SAMPLE"].tolist(),
-#             hap    = groups["HAP"].tolist(),
-#             ref = REFDICT,
-#             alginer = ALIGNER
-#         )
-#         ,
 
 # rule all:
 #     input:

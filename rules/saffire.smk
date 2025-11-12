@@ -18,20 +18,17 @@ ALIGNER = config.get('ALIGNER',"minimap2")
 scattergather:
     split=PARTS
 
-wildcard_constraints:
-    aligner = "|".join(["minimap2"]),
-
 
 def find_ref_fa(wildcards):
     return REF_DICT[wildcards.ref]["PATH"]
 
 def find_contigs(wildcards):
-    return gather.split("results/{sample}/saffire/work/split_paf/{ref}/tmp/{hap}.{aligner}.{scatteritem}.broken.paf", ref=wildcards.ref, hap=wildcards.hap, aligner=wildcards.aligner)
+    return gather.split("results/{sample}/saffire/work/split_paf/{ref}/tmp/{hap}.{aligner}.{scatteritem}.broken.paf", sample=wildcards.sample, ref=wildcards.ref, hap=wildcards.hap, aligner=wildcards.aligner)
 
 def find_all_trimmed_paf(wildcards):
     avail_pafs = []
     haps = ["hap1","hap2","un"]
-    values = full_manifest_df.loc[full_manifest_df["SAMPLE"] == wildcards.asm][["H1","H2","UNASSIGNED"]].iloc[0].tolist()
+    values = full_manifest_df.loc[full_manifest_df["SAMPLE"] == wildcards.sample][["H1","H2","UNASSIGNED"]].iloc[0].tolist()
     for idx, hap in enumerate(haps):
         if not str(values[idx]) == "nan":
             avail_pafs.append (f"results/{wildcards.sample}/saffire/outputs/trimmed_pafs/{wildcards.ref}/{hap}.{wildcards.aligner}.trimmed.paf")
@@ -62,7 +59,6 @@ rule make_minimap_paf:
     output:
         paf = "results/{sample}/saffire/work/alignments/{ref}/pafs/{hap}.minimap2.paf",
     wildcard_constraints:
-        hap='|'.join(conv_manifest_df.index),
         ref='[A-Za-z0-9_-]+',
     threads: 12
     params:
@@ -82,7 +78,6 @@ rule trim_paf:
     output:
         paf = "results/{sample}/saffire/outputs/trimmed_pafs/{ref}/{hap}.{aligner}.trimmed.paf",
     wildcard_constraints:
-        hap='|'.join(conv_manifest_df.index),
         ref='[A-Za-z0-9_-]+',
     threads: 12
     singularity:
@@ -97,12 +92,11 @@ rule trim_paf:
 # added -L param in case the CIGAR is > 65535 since older tools are unable to convert alignments with >65535 CIGAR ops to BAM. (https://lh3.github.io/minimap2/minimap2.html)
 rule make_minimap_bam:
     input:
-        fa = rules.rename_fasta.output.final_fasta,
+        fa = "results/{sample}/contamination_screening/outputs/final_fasta/{sample}_{hap}.fasta",
         ref = "resources/reference/{ref}/genome.fa"
     output:
         bam = "results/{sample}/saffire/work/alignments/{ref}/bams/{hap}.minimap2.bam",
     wildcard_constraints:
-        hap='|'.join(conv_manifest_df.index),
         ref='[A-Za-z0-9_-]+',        
     threads: 12
     params:
@@ -123,7 +117,6 @@ rule make_bed:
     output:
         bed = "results/{sample}/saffire/work/alignments/{ref}/beds/{hap}.bed",
     wildcard_constraints:
-        hap='|'.join(conv_manifest_df.index),
         ref='[A-Za-z0-9_-]+',              
     threads: 1
     singularity:
@@ -142,7 +135,6 @@ rule split_paf:
         flag = temp(scatter.split("results/{{sample}}/saffire/work/split_paf/{{ref}}/tmp/{{hap}}.{{aligner}}.{scatteritem}.paf")),
         temp_paf = temp("results/{sample}/saffire/work/split_paf/{ref}/tmp/{hap}_uniform.{aligner}.paf")
     wildcard_constraints:
-        hap='|'.join(conv_manifest_df.index),
         ref='[A-Za-z0-9_-]+',             
     threads: 1
     resources:
@@ -170,7 +162,7 @@ rule split_paf:
         col_out = df.columns.values
         for i, contig in enumerate(df[0].unique()):
             out_num = (i % PARTS) + 1
-            df.loc[df[0] == contig][col_out].to_csv(f'saffire/{wildcards.ref}/tmp/{wildcards.hap}.{ALIGNER}.{out_num}-of-{PARTS}.paf', sep='\t', index=False, header=False, mode='a+')
+            df.loc[df[0] == contig][col_out].to_csv(f'results/{wildcards.sample}/saffire/work/split_paf/{wildcards.ref}/tmp/{wildcards.hap}.{wildcards.aligner}.{out_num}-of-{PARTS}.paf', sep='\t', index=False, header=False, mode='a+')
 
 rule trim_break_orient_paf:
     input:
@@ -179,7 +171,6 @@ rule trim_break_orient_paf:
         contig = temp("results/{sample}/saffire/work/split_paf/{ref}/tmp/{hap}.{aligner}.{scatteritem}.orient.paf"),
         broken = temp("results/{sample}/saffire/work/split_paf/{ref}/tmp/{hap}.{aligner}.{scatteritem}.broken.paf")
     wildcard_constraints:
-        hap='|'.join(conv_manifest_df.index),
         ref='[A-Za-z0-9_-]+',             
     threads: 1
     params:
@@ -201,7 +192,6 @@ rule concat_pafs:
         paf = "results/{sample}/saffire/outputs/merged_paf/{ref}/{aligner}.concat.paf",
         flag = "results/{sample}/saffire/work/merged_paf/flags/{ref}.{aligner}.done"
     wildcard_constraints:
-        hap='|'.join(conv_manifest_df.index),
         ref='[A-Za-z0-9_-]+',             
     threads:1 
     resources:
@@ -220,7 +210,6 @@ rule combine_paf:
         paf = "results/{sample}/saffire/work/combine_paf/{ref}/tmp/{hap}.{aligner}.broken.paf",
         flag = "results/{sample}/saffire/work/combine_paf/flags/{ref}.{hap}.{aligner}.done"
     wildcard_constraints:
-        hap='|'.join(conv_manifest_df.index),
         ref='[A-Za-z0-9_-]+',             
     threads: 1
     resources:
@@ -238,7 +227,6 @@ rule saff_out:
         saf = "results/{sample}/saffire/outputs/safs/{ref}/{hap}.{aligner}.saf",
         flag = "results/{sample}/saffire/work/make_saf/flags/{ref}.{hap}.{aligner}.done"
     wildcard_constraints:
-        hap='|'.join(conv_manifest_df.index),
         ref='[A-Za-z0-9_-]+',             
     threads: 1
     singularity:
@@ -258,7 +246,6 @@ rule check_covered_chromosomes:
         tsv = "results/{sample}/saffire/outputs/chrom_cov/{ref}/{hap}.{aligner}.chrom_cov.tsv",
         flag = "results/{sample}/saffire/work/chrom_cov/flags/{ref}.{hap}.{aligner}.done"
     wildcard_constraints:
-        hap='|'.join(conv_manifest_df.index),
         ref='[A-Za-z0-9_-]+',             
     threads: 1
     resources:
@@ -301,13 +288,8 @@ rule check_covered_chromosomes:
                     for intervals in merged_dict[chrom]:
                         covered_length += (intervals[1]-intervals[0])
                     covered_rate = covered_length/chrom_length*100
-
                 except:
                     covered_rate = 0.0
                 print (f"{chrom}\t{covered_rate:.2f}", file=fout)
         
-        with open(output.flag,"w").close()
-                
-            
-
-        
+        open(output.flag,"w").close()
