@@ -4,34 +4,13 @@ import numpy as np
 import networkx as nx
 import more_itertools as mit
 
-
-configfile: 'config/config_asm_qc.yaml'
-
 PARTS=config.get('PARTS', 30)
 # MINIMAP_PARAMS = config.get('MINIMAP_PARAMS', '-x asm20 -m 10000 -z 10000,50 -r 50000 --end-bonus=100 -O 5,56 -E 4,1 -B 5')
 MINIMAP_PARAMS = config.get('MINIMAP_PARAMS', '-x asm20 -m 10000 -z 10000,50 -r 50000 --end-bonus=100 -O 5,56 -E 4,1 -B 5')
 MANIFEST = config.get('MANIFEST', 'config/manifest.tab')
 SV_SIZE = config.get('SV_SIZE', '30000')
 
-REF_DICT = config["REF"]
 ALIGNER = config.get('ALIGNER',"minimap2")
-
-
-raw_manifest_df = pd.read_csv(MANIFEST, sep='\t', comment='#', na_values=["","NA","na","N/A"])
-
-## Universial conversion of manifest df
-
-add_haps = {"H2":"hap2", "UNASSIGNED":"unassigned"}
-df_transform = list()
-for idx, row in raw_manifest_df.iterrows():
-    df_transform.append({"SAMPLE": f"%s_hap1"%row["SAMPLE"], "ASM":row["H1"]}) # required
-
-    for add_hap in add_haps:
-        if (add_hap in raw_manifest_df.columns) and (not pd.isna(row[add_hap])):
-            df_transform.append({"SAMPLE": f"%s_%s"%(row["SAMPLE"], add_haps[add_hap]), "ASM": row[add_hap]})
-        
-manifest_df = pd.DataFrame(df_transform)
-manifest_df.set_index("SAMPLE",inplace=True)
 
 #-----------------------------------------
 
@@ -39,35 +18,33 @@ manifest_df.set_index("SAMPLE",inplace=True)
 scattergather:
     split=PARTS
 
+wildcard_constraints:
+    aligner = "|".join(["minimap2"]),
+
+
 def find_ref_fa(wildcards):
     return REF_DICT[wildcards.ref]["PATH"]
 
-def find_fasta(wildcards):
-    return f"fcs_cleaned_fasta/{wildcards.sample}/{wildcards.sample}.fasta"
-
-def find_fasta_index(wildcards):
-    return f"fcs_cleaned_fasta/{wildcards.sample}/{wildcards.sample}.fasta.fai"
-
 def find_contigs(wildcards):
-    return gather.split('saffire/{ref}/tmp/{sample}.{aligner}.{scatteritem}.broken.paf', ref=wildcards.ref, sample=wildcards.sample, aligner=wildcards.aligner)
+    return gather.split("results/{sample}/saffire/work/split_paf/{ref}/tmp/{hap}.{aligner}.{scatteritem}.broken.paf", ref=wildcards.ref, hap=wildcards.hap, aligner=wildcards.aligner)
 
 def find_all_trimmed_paf(wildcards):
     avail_pafs = []
-    haps = ["hap1","hap2","unassigned"]
-    values = raw_manifest_df.loc[raw_manifest_df["SAMPLE"] == wildcards.asm][["H1","H2","UNASSIGNED"]].iloc[0].tolist()
+    haps = ["hap1","hap2","un"]
+    values = full_manifest_df.loc[full_manifest_df["SAMPLE"] == wildcards.asm][["H1","H2","UNASSIGNED"]].iloc[0].tolist()
     for idx, hap in enumerate(haps):
         if not str(values[idx]) == "nan":
-            avail_pafs.append (f'saffire/{wildcards.ref}/results/{wildcards.asm}_{hap}/alignments/{wildcards.asm}_{hap}.{wildcards.aligner}.trimmed.paf')
+            avail_pafs.append (f"results/{wildcards.sample}/saffire/outputs/trimmed_pafs/{wildcards.ref}/{hap}.{wildcards.aligner}.trimmed.paf")
     return avail_pafs
 
 
 checkpoint copy_ref_fasta:
     input:
-        raw_ref=lambda wildcards: config["REF"][wildcards.ref]["PATH"],
+        raw_ref=find_ref_fa,
     output:
-        ref = "saffire/{ref}/reference/{ref}.fa",
-        fai = "saffire/{ref}/reference/{ref}.fa.fai",
-        genome_index = "saffire/{ref}/reference/{ref}.genome.txt"
+        ref = "resources/reference/{ref}/genome.fa",
+        fai = "resources/reference/{ref}/genome.fa.fai",
+        genome_index = "resources/reference/{ref}/genome_index.txt"
     threads: 1,
     resources:
         mem = 4,
@@ -78,98 +55,15 @@ checkpoint copy_ref_fasta:
         cut -f1 {output.fai}> {output.genome_index}
         """
 
-rule get_meryl_db:
-    input:
-        ref="saffire/{ref}/reference/{ref}.fa",
-    output:
-        meryl_db_name = directory("saffire/{ref}/merylDB/{ref}"),
-    threads: 1
-    singularity:
-        "docker://eichlerlab/merqury:1.3.1"
-    resources:
-        mem = 16,
-        hrs = 72
-    shell: """
-        meryl count k=19 output {output.meryl_db_name} {input.ref}
-        """
-
-rule get_kmer_count:
-    input:
-        meryl_db_name = rules.get_meryl_db.output.meryl_db_name
-    output:
-        kmer_count = "saffire/{ref}/merylDB/repetitive_k19_{ref}.txt"
-    threads: 1
-    singularity:
-        "docker://eichlerlab/merqury:1.3.1"
-    resources:
-        mem = 8,
-        hrs = 72
-    shell: """ 
-        meryl print greater-than distinct=0.9998 {input.meryl_db_name} > {output.kmer_count}
-        """
-
-rule get_batch_ids:
-    input:
-        fai=find_fasta_index,
-    output:
-        batches=temp(
-            scatter.split(
-                "saffire/tmp/{{sample}}.{scatteritem}.batch",
-            )
-        ),
-    resources:
-        mem=4,
-        hrs=5,
-        disk_free=5,
-    threads: 1
-    run:
-        NIDS = len(output.batches)
-
-        batch_dict = {}
-
-        for i in range(NIDS):
-            batch_dict[i] = []
-
-        with open(input.fai, "r") as infile:
-            fai_list = [line.split("\t")[0] for line in infile]
-
-
-        for j in range(len(fai_list)):
-            batch_dict[j % NIDS].append(fai_list[j])
-
-        outs = [open(f, "w+") for f in output.batches]
-
-        for i in range(NIDS):
-            outs[i].write("\n".join(batch_dict[i]) + "\n")
-            outs[i].close()
-
-rule split_fasta:
-    input:
-        fasta=find_fasta,
-        batch_file="saffire/tmp/{sample}.{scatteritem}.batch",
-    output:
-        scatter_fasta=temp("saffire/tmp/{sample}.{scatteritem}.fasta"),
-    resources:
-        mem=4,
-        hrs=24,
-        disk_free=1,
-    threads: 4
-    singularity:
-        "docker://eichlerlab/binf-basics:0.1"
-    shell: """
-        samtools faidx {input.fasta} -r {input.batch_file} > {output.scatter_fasta}
-        """
-
 rule make_minimap_paf:
     input:
-        fa = find_fasta,
-        ref = find_ref_fa
+        fa = rules.rename_fasta.output.final_fasta,
+        ref = "resources/reference/{ref}/genome.fa"
     output:
-        paf = "saffire/{ref}/results/{sample}/alignments/{sample}.minimap2.paf",
+        paf = "results/{sample}/saffire/work/alignments/{ref}/pafs/{hap}.minimap2.paf",
     wildcard_constraints:
-        sample='|'.join(manifest_df.index),
+        hap='|'.join(conv_manifest_df.index),
         ref='[A-Za-z0-9_-]+',
-    benchmark: "saffire/{ref}/benchmarks/{sample}.minimap2_paf.benchmark.txt",
     threads: 12
     params:
         map_opts = MINIMAP_PARAMS,
@@ -182,13 +76,13 @@ rule make_minimap_paf:
         minimap2 -c -t {threads} -K {resources.mem}G --cs {params.map_opts} --secondary=no --eqx -Y {input.ref} {input.fa} > {output.paf}
         """
 
-rule trim_minimap_paf:
+rule trim_paf:
     input:
-        paf = "saffire/{ref}/results/{sample}/alignments/{sample}.minimap2.paf",
+        paf = "results/{sample}/saffire/work/alignments/{ref}/pafs/{hap}.{aligner}.paf",
     output:
-        paf = "saffire/{ref}/results/{sample}/alignments/{sample}.minimap2.trimmed.paf",
+        paf = "results/{sample}/saffire/outputs/trimmed_pafs/{ref}/{hap}.{aligner}.trimmed.paf",
     wildcard_constraints:
-        sample='|'.join(manifest_df.index),
+        hap='|'.join(conv_manifest_df.index),
         ref='[A-Za-z0-9_-]+',
     threads: 12
     singularity:
@@ -203,14 +97,13 @@ rule trim_minimap_paf:
 # added -L param in case the CIGAR is > 65535 since older tools are unable to convert alignments with >65535 CIGAR ops to BAM. (https://lh3.github.io/minimap2/minimap2.html)
 rule make_minimap_bam:
     input:
-        fa = find_fasta,
-        ref = find_ref_fa
+        fa = rules.rename_fasta.output.final_fasta,
+        ref = "resources/reference/{ref}/genome.fa"
     output:
-        bam = "saffire/{ref}/results/{sample}/alignments/{sample}.minimap2.bam",
+        bam = "results/{sample}/saffire/work/alignments/{ref}/bams/{hap}.minimap2.bam",
     wildcard_constraints:
-        sample='|'.join(manifest_df.index),
+        hap='|'.join(conv_manifest_df.index),
         ref='[A-Za-z0-9_-]+',        
-    benchmark: "saffire/{ref}/benchmarks/{sample}.minimap2_bam.benchmark.txt",
     threads: 12
     params:
         map_opts = MINIMAP_PARAMS,
@@ -225,12 +118,12 @@ rule make_minimap_bam:
 
 rule make_bed:
     input:
-        paf = "saffire/{ref}/results/{sample}/alignments/{sample}.{aligner}.trimmed.paf",
-        genome_index = "saffire/{ref}/reference/{ref}.genome.txt"
+        paf = rules.trim_paf.output.paf,
+        genome_index = "resources/reference/{ref}/genome_index.txt"
     output:
-        bed = "saffire/{ref}/results/{sample}/beds/{sample}.{aligner}.bed",
+        bed = "results/{sample}/saffire/work/alignments/{ref}/beds/{hap}.bed",
     wildcard_constraints:
-        sample='|'.join(manifest_df.index),
+        hap='|'.join(conv_manifest_df.index),
         ref='[A-Za-z0-9_-]+',              
     threads: 1
     singularity:
@@ -244,12 +137,12 @@ rule make_bed:
 
 rule split_paf:
     input:
-        paf = "saffire/{ref}/results/{sample}/alignments/{sample}.{aligner}.paf",
+        paf = "results/{sample}/saffire/work/alignments/{ref}/pafs/{hap}.{aligner}.paf",
     output:
-        flag = temp(scatter.split("saffire/{{ref}}/tmp/{{sample}}.{{aligner}}.{scatteritem}.paf")),
-        temp_paf = temp("saffire/{ref}/tmp/{sample}_uniform.{aligner}.paf")
+        flag = temp(scatter.split("results/{{sample}}/saffire/work/split_paf/{{ref}}/tmp/{{hap}}.{{aligner}}.{scatteritem}.paf")),
+        temp_paf = temp("results/{sample}/saffire/work/split_paf/{ref}/tmp/{hap}_uniform.{aligner}.paf")
     wildcard_constraints:
-        sample='|'.join(manifest_df.index),
+        hap='|'.join(conv_manifest_df.index),
         ref='[A-Za-z0-9_-]+',             
     threads: 1
     resources:
@@ -277,16 +170,16 @@ rule split_paf:
         col_out = df.columns.values
         for i, contig in enumerate(df[0].unique()):
             out_num = (i % PARTS) + 1
-            df.loc[df[0] == contig][col_out].to_csv(f'saffire/{wildcards.ref}/tmp/{wildcards.sample}.{ALIGNER}.{out_num}-of-{PARTS}.paf', sep='\t', index=False, header=False, mode='a+')
+            df.loc[df[0] == contig][col_out].to_csv(f'saffire/{wildcards.ref}/tmp/{wildcards.hap}.{ALIGNER}.{out_num}-of-{PARTS}.paf', sep='\t', index=False, header=False, mode='a+')
 
 rule trim_break_orient_paf:
     input:
-        paf = 'saffire/{ref}/tmp/{sample}.{aligner}.{scatteritem}.paf'
+        paf = "results/{sample}/saffire/work/split_paf/{ref}/tmp/{hap}.{aligner}.{scatteritem}.paf"
     output:
-        contig = temp('saffire/{ref}/tmp/{sample}.{aligner}.{scatteritem}.orient.paf'),
-        broken = temp('saffire/{ref}/tmp/{sample}.{aligner}.{scatteritem}.broken.paf')
+        contig = temp("results/{sample}/saffire/work/split_paf/{ref}/tmp/{hap}.{aligner}.{scatteritem}.orient.paf"),
+        broken = temp("results/{sample}/saffire/work/split_paf/{ref}/tmp/{hap}.{aligner}.{scatteritem}.broken.paf")
     wildcard_constraints:
-        sample='|'.join(manifest_df.index),
+        hap='|'.join(conv_manifest_df.index),
         ref='[A-Za-z0-9_-]+',             
     threads: 1
     params:
@@ -305,44 +198,47 @@ rule concat_pafs:
     input:
         paf = find_all_trimmed_paf
     output:
-        paf = 'saffire/{ref}/results/merged_paf/{aligner}/{asm}.concat.paf'
+        paf = "results/{sample}/saffire/outputs/merged_paf/{ref}/{aligner}.concat.paf",
+        flag = "results/{sample}/saffire/work/merged_paf/flags/{ref}.{aligner}.done"
     wildcard_constraints:
-        sample='|'.join(manifest_df.index),
+        hap='|'.join(conv_manifest_df.index),
         ref='[A-Za-z0-9_-]+',             
     threads:1 
     resources:
         mem=4,
         hrs=1
-    shell:
-        '''
+    shell: """
         cat {input.paf} > {output.paf}
-        '''
+        touch {output.flag}
+        """
 
 rule combine_paf:
     input:
         paf = find_contigs,
         flag = rules.split_paf.output.flag
     output:
-        paf = 'saffire/{ref}/tmp/{sample}.{aligner}.broken.paf'
+        paf = "results/{sample}/saffire/work/combine_paf/{ref}/tmp/{hap}.{aligner}.broken.paf",
+        flag = "results/{sample}/saffire/work/combine_paf/flags/{ref}.{hap}.{aligner}.done"
     wildcard_constraints:
-        sample='|'.join(manifest_df.index),
+        hap='|'.join(conv_manifest_df.index),
         ref='[A-Za-z0-9_-]+',             
     threads: 1
     resources:
         mem = 8,
         hrs = 24
-    shell:
-        '''
+    shell: """
         cat {input.paf} > {output.paf}
-        '''
+        touch {output.flag}
+        """
 
 rule saff_out:
     input:
         paf = rules.combine_paf.output.paf
     output:
-        saf = 'saffire/{ref}/results/{sample}/saff/{sample}.{aligner}.saf'
+        saf = "results/{sample}/saffire/outputs/safs/{ref}/{hap}.{aligner}.saf",
+        flag = "results/{sample}/saffire/work/make_saf/flags/{ref}.{hap}.{aligner}.done"
     wildcard_constraints:
-        sample='|'.join(manifest_df.index),
+        hap='|'.join(conv_manifest_df.index),
         ref='[A-Za-z0-9_-]+',             
     threads: 1
     singularity:
@@ -350,18 +246,19 @@ rule saff_out:
     resources:
         mem = 8,
         hrs = 24
-    shell:
-        '''
+    shell: """
         rb stats --paf {input.paf} > {output.saf}
-        '''
+        touch {output.flag}
+        """
 
 rule check_covered_chromosomes:
     input:
-        paf = "saffire/{ref}/results/{sample}/alignments/{sample}.{aligner}.paf"
+        paf = rules.trim_paf.output.paf
     output:
-        tsv = "saffire/{ref}/results/{sample}/beds/{sample}.{aligner}.chrom_cov.tsv"
+        tsv = "results/{sample}/saffire/outputs/chrom_cov/{ref}/{hap}.{aligner}.chrom_cov.tsv",
+        flag = "results/{sample}/saffire/work/chrom_cov/flags/{ref}.{hap}.{aligner}.done"
     wildcard_constraints:
-        sample='|'.join(manifest_df.index),
+        hap='|'.join(conv_manifest_df.index),
         ref='[A-Za-z0-9_-]+',             
     threads: 1
     resources:
@@ -408,6 +305,8 @@ rule check_covered_chromosomes:
                 except:
                     covered_rate = 0.0
                 print (f"{chrom}\t{covered_rate:.2f}", file=fout)
+        
+        with open(output.flag,"w").close()
                 
             
 

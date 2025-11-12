@@ -16,7 +16,7 @@ manifest_df = conv_manifest_df.copy()
 #-----------------------------------------
 
 
-def get_fasta(wildcards):
+def get_raw_fasta(wildcards):
     return manifest_df.at[(wildcards.sample, wildcards.hap), "FASTA"]
 
 def find_gx_report(wildcards):
@@ -44,7 +44,7 @@ localrules:
 
 rule index_fasta:
     input:
-        fasta = get_fasta
+        fasta = get_raw_fasta
     output:
         link_fasta = "results/{sample}/contamination_screening/work/temp/raw_fasta/{hap}.fasta",
         fai = "results/{sample}/contamination_screening/work/temp/raw_fasta/{hap}.fasta.fai"
@@ -441,14 +441,14 @@ rule rename_fasta:
         cleaned_fasta = rules.split_rdna.output.cleaned_fasta,
         mito_fasta = rules.extract_mito.output.mito_fasta,
     output:
-        renamed_final_fasta = "results/{sample}/contamination_screening/outputs/final_fasta/{sample}_{hap}.fasta",
-        renamed_final_fai = "results/{sample}/contamination_screening/outputs/final_fasta/{sample}_{hap}.fasta.fai"
+        final_fasta = "results/{sample}/contamination_screening/outputs/final_fasta/{sample}_{hap}.fasta",
+        final_fai = "results/{sample}/contamination_screening/outputs/final_fasta/{sample}_{hap}.fasta.fai"
     threads: 1
     resources:
         mem = 8,
         hrs = 12,
     run:
-        renamed_final_fasta = output.renamed_final_fasta
+        final_fasta = output.final_fasta
 
         original_fasta = pysam.FastaFile(input.fasta)
         cleaned_fasta_records = list(SeqIO.parse(input.cleaned_fasta, "fasta"))
@@ -465,8 +465,8 @@ rule rename_fasta:
             else:
                 cleaned_seq_name = seq_name.replace(":","_trim_")
             final_fasta_records.append(SeqRecord(Seq(cleaned_sequence), id=cleaned_seq_name, description=""))
-        with open(renamed_final_fasta, "w") as fout:
+        with open(final_fasta, "w") as fout:
             fasta_writer = FastaWriter(fout, wrap=None)
             fasta_writer.write_file(final_fasta_records)
 
-        pysam.faidx(renamed_final_fasta) # indexing
+        pysam.faidx(final_fasta) # indexing

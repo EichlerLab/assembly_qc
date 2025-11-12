@@ -35,23 +35,71 @@ sample_list = sorted(full_manifest_df["SAMPLE"].astype(str).unique())
 
 full_manifest_df.set_index("SAMPLE",inplace=True) 
 
-groups = conv_manifest_df[["SAMPLE","HAP"]].drop_duplicates()
+groups = conv_manifest_df[["SAMPLE","HAP"]].drop_duplicates().copy()
 
 conv_manifest_df.set_index(["SAMPLE","HAP"],inplace=True)
 
 wildcard_constraints:
-    sample = "|".join(sample_list),
+    sample = "|".join(sample_list)
 
+include: "functions/common.smk"
 include: "rules/fcs_gx.smk"
+include: "rules/merqury.smk"
 
 
+print (full_manifest_df.loc[full_manifest_df["H1"] != "NA"].index)
+
+# localrules: all, gather_outputs_per_sample
+
+# print ("GROUP")
+# print (groups)
 
 
-localrules:
-    all,
+# rule all:
+#     input:
+#         expand("results/{sample}/outputs/all_done",
+#             sample = full_manifest_df.index
+#         )
 
-print ("GROUP")
-print (groups)
+# rule gather_outputs_per_sample:
+#     input:
+#         get_fcs_final_outputs,
+#         get_merqury_final_outputs,
+#         get_saffire_final_outputs,
+#     output:
+#         flag = touch("results/{sample}/outputs/all_done")
+
+# rule all:
+#     input:
+#         expand(
+#             "results/{sample}/merqury/outputs/{sample}.qv",
+#             sample = full_manifest_df.loc[full_manifest_df["H1"] != "NA"].index,
+#         ),
+#         expand(
+#             "results/{sample}/saffire/outputs/chrom_cov/{ref}/{hap}.{aligner}.chrom_cov.tsv",
+#             zip,
+#             sample = groups["SAMPLE"].tolist(),
+#             hap    = groups["HAP"].tolist(),
+#             ref = REFDICT,
+#             alginer = ALIGNER
+#         ),
+#         expand("results/{sample}/saffire/outputs/safs/{ref}/{hap}.{aligner}.saf",
+#             zip,
+#             sample = groups["SAMPLE"].tolist(),
+#             hap    = groups["HAP"].tolist(),
+#             ref = REFDICT,
+#             alginer = ALIGNER
+#         )
+#         ,
+
+# rule all:
+#     input:
+#         expand(
+#             "results/{sample}/merqury/outputs/{sample}.qv",
+#             sample=full_manifest_df.loc[full_manifest_df["H1"] != "NA"].index,
+#         ),
+#         find_trios,
+
 
 # rule all:
 #     input:        
