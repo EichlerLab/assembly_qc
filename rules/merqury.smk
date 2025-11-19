@@ -180,13 +180,18 @@ rule merqury_script:
     threads: 1
     run:
         meryl_abs = os.path.abspath(input.meryl)
-        haps_abs = [ os.path.abspath(cleaned_hap) for cleaned_hap in input.cleaned_haps ]
+        if isinstance(input.cleaned_haps, str):
+            cleaned_haps = [input.cleaned_haps]
+        elif isinstance(input.cleaned_haps, list):
+            cleaned_haps = input.cleaned_haps
+        haps_abs = [ os.path.abspath(cleaned_hap) for cleaned_hap in cleaned_haps ]
         sample_all = " ".join(haps_abs)
+        unassigned_contig = params.unassigned_contig
         with open(output.run_script, "w") as outfile:
             outfile.write("#!/usr/bin/env bash \n")
             outfile.write(f"merqury.sh {meryl_abs} {sample_all} {wildcards.sample}\n")
-            if os.path.isfile(params.unassigned_contig):
-                unassigned_abs = os.path.abspath(params.unassigned_contig)
+            if os.path.isfile(unassigned_contig):
+                unassigned_abs = os.path.abspath(unassigned_contig)
                 outfile.write(f"merqury.sh {meryl_abs} {unassigned_abs} {wildcards.sample}_unassigned\n")
         os.chmod(output.run_script, 0o755)
 
@@ -205,7 +210,8 @@ rule merqury_run:
     shell: """ 
         outdir="$(dirname {output.qv})"
         mkdir -p $outdir
-        pushd $outdir; $(realpath {input.run_script}); popd
+        merqury_sh=$(realpath {input.run_script})
+        pushd $outdir; $merqury_sh; popd
         """
 
 
@@ -279,5 +285,6 @@ rule merqury_trio_run:
     shell: """
         outdir="$(dirname {output.png})"
         mkdir -p $outdir
-        pushd $outdir; $(realpath {input.run_script}); popd
+        merqury_sh=$(realpath {input.run_script})
+        pushd $outdir; $merqury_sh; popd
         """ 

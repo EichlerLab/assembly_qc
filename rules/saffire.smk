@@ -4,7 +4,7 @@ import numpy as np
 import networkx as nx
 import more_itertools as mit
 
-PARTS=config.get('PARTS', 30)
+PARTS=config.get('PARTS', 15)
 # MINIMAP_PARAMS = config.get('MINIMAP_PARAMS', '-x asm20 -m 10000 -z 10000,50 -r 50000 --end-bonus=100 -O 5,56 -E 4,1 -B 5')
 MINIMAP_PARAMS = config.get('MINIMAP_PARAMS', '-x asm20 -m 10000 -z 10000,50 -r 50000 --end-bonus=100 -O 5,56 -E 4,1 -B 5')
 MANIFEST = config.get('MANIFEST', 'config/manifest.tab')
@@ -153,16 +153,19 @@ rule split_paf:
         with open(input.paf, 'r') as infile:
             for line in infile:
                 out_list.append(line.split('\t')[0:12]+[x for x in line.split('\t')[12:] if x.split(':')[0] in all_tags])
-
-        with open(output.temp_paf, 'w') as outfile:
+        output_temp_paf = output.temp_paf
+        with open(output_temp_paf, 'w') as outfile:
             for item in out_list:
                 outfile.write('\t'.join(item))
 
-        df = pd.read_csv(output.temp_paf, sep='\t', low_memory=False, header=None)
+        df = pd.read_csv(output_temp_paf, sep='\t', low_memory=False, header=None)
+        print (df)
         col_out = df.columns.values
         for i, contig in enumerate(df[0].unique()):
             out_num = (i % PARTS) + 1
-            df.loc[df[0] == contig][col_out].to_csv(f'results/{wildcards.sample}/saffire/work/split_paf/{wildcards.ref}/tmp/{wildcards.hap}.{wildcards.aligner}.{out_num}-of-{PARTS}.paf', sep='\t', index=False, header=False, mode='a+')
+            out_paf = f'results/{wildcards.sample}/saffire/work/split_paf/{wildcards.ref}/tmp/{wildcards.hap}.{wildcards.aligner}.{out_num}-of-{PARTS}.paf'
+            print (out_paf)
+            df.loc[df[0] == contig][col_out].to_csv(out_paf, sep='\t', index=False, header=False, mode='a+')
 
 rule trim_break_orient_paf:
     input:
