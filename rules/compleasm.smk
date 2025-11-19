@@ -1,53 +1,27 @@
-import pandas as pd
-import os
 from pathlib import Path
-
-configfile: "config/config.yaml"
-MANIFEST = config.get("MANIFEST", "config/manifest.tab")
-
 
 MODE = config.get("MODE", "lite")
 LINEAGE = config.get("LINEAGE", "primates")
 BUSCO_DB_PATH = config.get("DB_DIR", "/net/eichler/vol28/eee_shared/buscodb/")
 
-SNAKEMAKE_DIR = os.path.dirname(workflow.snakefile)
 
-raw_manifest_df = pd.read_csv(MANIFEST, sep='\t', comment='#', na_values=["","NA","na","N/A"])
-
-## Universial conversion of manifest df
-
-add_haps = {"H2":"hap2", "UNASSIGNED":"unassigned"}
-df_transform = list()
-for idx, row in raw_manifest_df.iterrows():
-    df_transform.append({"SAMPLE": f"%s_hap1"%row["SAMPLE"], "ASM":row["H1"]}) # required
-
-    for add_hap in add_haps:
-        if (add_hap in raw_manifest_df.columns) and (not pd.isna(row[add_hap])):
-            df_transform.append({"SAMPLE": f"%s_%s"%(row["SAMPLE"], add_haps[add_hap]), "ASM": row[add_hap]})
-        
-manifest_df = pd.DataFrame(df_transform)
-manifest_df.set_index("SAMPLE",inplace=True)
-#-----------------------------------------
+def find_all_compleasm_results(wildcards):
+    avail_results = []
+    haps = ["hap1","hap2","un"]
+    values = full_manifest_df.loc[wildcards.sample][["H1","H2","UNASSIGNED"]].tolist()
+    for idx, hap in enumerate(haps):
+        if not str(values[idx]) == "nan":
+            avail_results.append (f"results/{wildcards.sample}/compleasm/work/summary/{hap}/summary.txt")
+    return avail_results
 
 
-
-def get_fasta(wildcards):
-    return f"fcs_cleaned_fasta/{wildcards.sample}/{wildcards.sample}.fasta"
-
-wildcard_constraints:
-    sample="|".join(manifest_df.index),
-
-localrules: compleasm_run, all,
-
-rule all:
-    input:
-        expand("compleasm/results/{sample}/summary.txt", sample=manifest_df.index.values),
+localrules: compleasm_run
 
 rule compleasm_run:
     input:
-        asm_fasta=get_fasta,
+        asm_fasta="results/{sample}/contamination_screening/outputs/final_fasta/{sample}_{hap}.fasta",
     output:
-        summary = "compleasm/results/{sample}/summary.txt",
+        summary = "results/{sample}/compleasm/work/summary/{hap}/summary.txt",
     threads: 16
     resources:
         mem=16,
@@ -60,6 +34,43 @@ rule compleasm_run:
         "docker://eichlerlab/compleasm:0.2.6"
     shell:
         """
-        compleasm.py run -a {input.asm_fasta} -o compleasm/results/{wildcards.sample} -t {threads} -l {params.lineage} -m {params.mode} -L {params.db_path}
+        compleasm.py run -a {input.asm_fasta} -o results/{wildcards.sample}/compleasm/work/summary/{wildcards.hap} -t {threads} -l {params.lineage} -m {params.mode} -L {params.db_path}
         """
 
+
+rule summarize_compleasm_results:
+    input:
+        find_all_compleasm_results
+    output:
+        summary = "results/{sample}/compleasm/outputs/summary/{sample}.summary.tsv"
+    threads: 1,
+    resources:
+        mem=4,
+        hrs=1,
+    run:
+        summary_data = []
+        compleasm_cols = ["ASSEMBLY", "HAPLOTYPE", "S", "D", "F", "I", "M", "N"]
+        for hap_result in input.find_all_compleasm_results:
+            path_token = hap_result.split("/")
+            sample = path_token[2]
+            hap = path_token[5]
+
+            hap_record = {"ASSEMBLY":sample, "HAPLOTYPE":hap}
+            with open(hap_result) as finp:
+                for line in finp:
+                    if not line.strip() or line.startswith("#"):
+                        continue
+                    key, remains = line.strip().split(":")
+                    value = int(remains.split(",")[-1])
+                    hap_record[key] = value
+            summary_data.append(hap_record)
+        df = pd.DataFrame(summary_data)
+        df.reindex(columns=compleasm_cols)
+        df.to_csv(output.summary, sep="\t", index=False)
+        
+
+        
+            
+                    
+
+    

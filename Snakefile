@@ -66,8 +66,13 @@ def get_saffire_final_outputs(wildcards):
     ]
     return final_outputs
 
-## ==================
 
+def get_compleasm_final_outputs(wildcards):
+    sample = wildcards.sample
+    print (f"results/{sample}/compleasm/outputs/summary/{sample}.summary.tsv")
+    return f"results/{sample}/compleasm/outputs/summary/{sample}.summary.tsv"
+
+## ==================
 
 
 full_manifest_df = pd.read_csv(
@@ -106,16 +111,18 @@ rule gather_outputs_per_sample:
     input:
         get_fcs_final_outputs,
         get_merqury_final_outputs,
-        get_saffire_final_outputs
+        get_saffire_final_outputs,
+        get_compleasm_final_outputs
     output:
         flag = touch("results/{sample}/outputs/all_done")
 
 
 ##===include MUST BE HERE.
-
 include: "rules/fcs_gx.smk"
 include: "rules/merqury.smk"
 include: "rules/saffire.smk"
+include: "rules/compleasm.smk"
+
 
 ##=========================
 

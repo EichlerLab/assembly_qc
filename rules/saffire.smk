@@ -28,7 +28,7 @@ def find_contigs(wildcards):
 def find_all_trimmed_paf(wildcards):
     avail_pafs = []
     haps = ["hap1","hap2","un"]
-    values = full_manifest_df.loc[full_manifest_df["SAMPLE"] == wildcards.sample][["H1","H2","UNASSIGNED"]].iloc[0].tolist()
+    values = full_manifest_df.loc[wildcards.sample][["H1","H2","UNASSIGNED"]].tolist()
     for idx, hap in enumerate(haps):
         if not str(values[idx]) == "nan":
             avail_pafs.append (f"results/{wildcards.sample}/saffire/outputs/trimmed_pafs/{wildcards.ref}/{hap}.{wildcards.aligner}.trimmed.paf")
