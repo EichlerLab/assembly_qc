@@ -1,5 +1,3 @@
-import pandas as pd
-import os
 import re
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
@@ -7,36 +5,9 @@ from Bio.SeqIO.FastaIO import FastaWriter
 from Bio import SeqIO
 import pysam
 
-configfile: "config/config_asm_qc.yaml"
-MANIFEST = config.get('MANIFEST', 'config/manifest_asm_qc.tab')
 SNAKEMAKE_ROOT_DIR = os.path.dirname(workflow.snakefile).replace("/rules","")
 
-
-raw_manifest_df = pd.read_csv(MANIFEST, sep='\t', comment='#', na_values=["","NA","na","N/A"])
-
-## Universial conversion of manifest df
-
-add_haps = {"H2":"hap2", "UNASSIGNED":"unassigned"}
-df_transform = list()
-for idx, row in raw_manifest_df.iterrows():
-    df_transform.append({"SAMPLE": f"%s_hap1"%row["SAMPLE"], "ASM":row["H1"]}) # required
-
-    for add_hap in add_haps:
-        if (add_hap in raw_manifest_df.columns) and (not pd.isna(row[add_hap])):
-            df_transform.append({"SAMPLE": f"%s_%s"%(row["SAMPLE"], add_haps[add_hap]), "ASM": row[add_hap]})
-        
-manifest_df = pd.DataFrame(df_transform)
-manifest_df.set_index("SAMPLE",inplace=True)
-
-raw_manifest_df.set_index("SAMPLE", inplace=True)
-
 #-----------------------------------------
-
-def find_scaffold_fasta(wildcards):
-    return f"fcs_cleaned_fasta/{wildcards.sample}/{wildcards.sample}.fasta"
-
-def find_contig_fasta(wildcards):
-    return f"fcs_cleaned_fasta/{wildcards.sample}/contig_fasta/{wildcards.sample}.fasta"
 
 def find_all_fasta_set(wildcards):
     fasta_set = [f"{wildcards.asm}_hap1"]
@@ -60,9 +31,9 @@ def find_all_qv(wildcards):
 
 rule split_scaffolds:
     input:
-        scaffold_fasta=find_scaffold_fasta,
+        scaffold_fasta=rules.rename_fasta.output.final_fasta,
     output:
-        contig_fasta = "fcs_cleaned_fasta/{sample}/contig_fasta/{sample}.fasta"
+        contig_fasta = "results/{sample}/contamination_screening/outputs/contig_fasta/{sample}_{hap}.fasta"
     threads: 1,
     resources:
         mem=lambda wildcards, attempt: attempt * 8,
@@ -111,29 +82,33 @@ rule split_scaffolds:
 
 rule get_telo_stats:
     input:
-        scaffold_fasta = "fcs_cleaned_fasta/{sample}/{sample}.fasta",
-        contig_fasta = "fcs_cleaned_fasta/{sample}/contig_fasta/{sample}.fasta",
+        scaffold_fasta = rules.rename_fasta.output.final_fasta,
+        contig_fasta = rules.split_scaffolds.output.contig_fasta
     output:
-        scaffold_telo_tbl = "stats/telo/{sample}.scaffold.telo.tbl",
-        contig_telo_tbl = "stats/telo/{sample}.contig.telo.tbl",
+        scaffold_telo_tbl = "results/{sample}/stats/work/telo/{hap}.scaffold.telo.tbl",
+        scaffold_flag = "results/{sample}/stats/work/telo/flags/scaffold_{hap}.done",
+        contig_telo_tbl = "results/{sample}/stats/work/telo/{hap}.contig.telo.tbl",
+        config_flag = "results/{sample}/stats/work/telo/flags/contig_{hap}.done",
     singularity:
         "docker://eichlerlab/binf-basics:0.1",
     threads: 1,
     resources:
-        hrs=4,
+        hrs=1,
         mem=6,
     shell:
         """
         echo -e "seq_name\tstart\tend\tseq_length" > {output.scaffold_telo_tbl} && seqtk telo {input.scaffold_fasta} >> {output.scaffold_telo_tbl}
+        touch {output.scaffold_flag}
         echo -e "seq_name\tstart\tend\tseq_length" > {output.contig_telo_tbl} && seqtk telo {input.contig_fasta} >> {output.contig_telo_tbl}
+        touch {output.config_flag}
         """
 
 rule get_contig_stats:
     input:
-        fasta = "fcs_cleaned_fasta/{sample}/contig_fasta/{sample}.fasta",
-        telo_tbl = "stats/telo/{sample}.contig.telo.tbl",
+        fasta = rules.split_scaffolds.output.contig_fasta,
+        telo_tbl = rules.get_telo_stats.output.contig_telo_tbl
     output:
-        stats = "stats/seq_stats/{sample}.contig.stats",
+        stats = "results/{sample}/stats/work/fasta_stats/{hap}.contig.stats",
     threads: 1,
     resources:
         mem=lambda wildcards, attempt: attempt * 16,
@@ -143,17 +118,43 @@ rule get_contig_stats:
 
 rule get_scaffold_stats:
     input:
-        fasta = "fcs_cleaned_fasta/{sample}/{sample}.fasta",
-        chrom_cov = "saffire/CHM13/results/{sample}/beds/{sample}.minimap2.chrom_cov.tsv",
-        telo_tbl = "stats/telo/{sample}.scaffold.telo.tbl",
+        fasta = rules.rename_fasta.output.final_fasta,
+        telo_tbl = rules.get_telo_stats.output.scaffold_telo_tbl,
     output:
-        stats = "stats/seq_stats/{sample}.scaffold.stats",
+        stats = "results/{sample}/stats/work/fasta_stats/{hap}.scaffold.stats",
     threads: 1,
     resources:
         mem=lambda wildcards, attempt: attempt * 16,
         hrs=4,
     script:
         f"{SNAKEMAKE_ROOT_DIR}/scripts/fasta_stats.py"
+
+rule summary_hap_stats:
+    input:
+        scaffold_stats = rules.get_scaffold_stats.output.stats,
+        contig_stats = rules.get_scaffold_stats.output.stats,
+        covered_chrom_tsv = "results/{sample}/saffire/outputs/chrom_cov/CHM13/{hap}.minimap2.chrom_cov.tsv"
+    output:
+        hap_summary = "results/{sample}/stats/outputs/summary_by_hap/{hap}.summary.stats"
+    threads: 1,
+    resources:
+        hrs=1,
+        mem=4,
+    run:
+        scaffold_stats = input.scaffold_stats
+        contig_stats = input.contig_stats
+        covered_chrom_tsv = input.covered_chrom_tsv
+        df_scaffold = pd.read_csv(scaffold_stats, sep="\t").add_suffix("_scaffold")
+        df_scaffold = df_scaffold.rename(columns = {"sample_scaffold":"sample", "haplotype_scaffold":"haplotype"})
+        
+        df_contig = pd.read_csv(contig_stats, sep="\t").add_suffix("_contig")
+        df_contig = df_contig.rename(columns = {"sample_contig":"sample", "haplotype_contig":"haplotype"})
+
+        df = pd.merge(df_scaffold, df_contig, on=["sample","haplotype"], how="outer")
+        print (df.info())
+        
+
+
 
 # rule summarize_stats:
 #     input:

@@ -19,7 +19,7 @@ localrules: compleasm_run
 
 rule compleasm_run:
     input:
-        asm_fasta="results/{sample}/contamination_screening/outputs/final_fasta/{sample}_{hap}.fasta",
+        asm_fasta=rules.rename_fasta.output.final_fasta,
     output:
         summary = "results/{sample}/compleasm/work/summary/{hap}/summary.txt",
     threads: 16
@@ -40,7 +40,7 @@ rule compleasm_run:
 
 rule summarize_compleasm_results:
     input:
-        find_all_compleasm_results
+        all_results = find_all_compleasm_results
     output:
         summary = "results/{sample}/compleasm/outputs/summary/{sample}.summary.tsv"
     threads: 1,
@@ -50,9 +50,9 @@ rule summarize_compleasm_results:
     run:
         summary_data = []
         compleasm_cols = ["ASSEMBLY", "HAPLOTYPE", "S", "D", "F", "I", "M", "N"]
-        for hap_result in input.find_all_compleasm_results:
+        for hap_result in input.all_results:
             path_token = hap_result.split("/")
-            sample = path_token[2]
+            sample = path_token[1]
             hap = path_token[5]
 
             hap_record = {"ASSEMBLY":sample, "HAPLOTYPE":hap}

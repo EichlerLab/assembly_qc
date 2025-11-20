@@ -69,8 +69,17 @@ def get_saffire_final_outputs(wildcards):
 
 def get_compleasm_final_outputs(wildcards):
     sample = wildcards.sample
-    print (f"results/{sample}/compleasm/outputs/summary/{sample}.summary.tsv")
     return f"results/{sample}/compleasm/outputs/summary/{sample}.summary.tsv"
+
+
+def get_fasta_stats_outputs(wildcards):
+    sample = wildcards.sample
+    sample_sub = groups[groups["SAMPLE"] == sample]
+    final_outputs = [
+        f"results/{sample}/stats/outputs/summary_by_hap/{row.HAP}.summary.stats"
+        for idx, row in sample_sub.iterrows()
+    ]
+    return final_outputs
 
 ## ==================
 
@@ -112,16 +121,19 @@ rule gather_outputs_per_sample:
         get_fcs_final_outputs,
         get_merqury_final_outputs,
         get_saffire_final_outputs,
-        get_compleasm_final_outputs
+        get_compleasm_final_outputs,
+        get_fasta_stats_outputs
     output:
         flag = touch("results/{sample}/outputs/all_done")
 
 
 ##===include MUST BE HERE.
+include: "rules/common_functions.smk"
 include: "rules/fcs_gx.smk"
 include: "rules/merqury.smk"
 include: "rules/saffire.smk"
 include: "rules/compleasm.smk"
+include: "rules/fasta_stats.smk"
 
 
 ##=========================
@@ -145,12 +157,6 @@ include: "rules/compleasm.smk"
 # include: "rules/fcs_gx.smk"
 # include: "rules/merqury.smk"
 
-# print (full_manifest_df["H1"])
-# print (full_manifest_df.loc[~full_manifest_df["H1"].isna()].index)
-
-
-# print ("GROUP")
-# print (groups)
 
 # localrules: all, gather_outputs_per_sample
 

@@ -26,7 +26,7 @@ def get_nt_length(fasta):
     else:
         asm_type = "scaffold"
     fasta_name = os.path.basename(fasta)
-    for hap_tag in ["_hap1.fasta","_hap2.fasta","_unassigned.fasta"]:
+    for hap_tag in ["_hap1.fasta","_hap2.fasta","_un.fasta"]:
         if re.search(hap_tag, fasta_name):
             sample = fasta_name.replace(hap_tag,"")
             haplotype = hap_tag.split("_")[1].split(".")[0]

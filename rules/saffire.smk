@@ -159,12 +159,10 @@ rule split_paf:
                 outfile.write('\t'.join(item))
 
         df = pd.read_csv(output_temp_paf, sep='\t', low_memory=False, header=None)
-        print (df)
         col_out = df.columns.values
         for i, contig in enumerate(df[0].unique()):
             out_num = (i % PARTS) + 1
             out_paf = f'results/{wildcards.sample}/saffire/work/split_paf/{wildcards.ref}/tmp/{wildcards.hap}.{wildcards.aligner}.{out_num}-of-{PARTS}.paf'
-            print (out_paf)
             df.loc[df[0] == contig][col_out].to_csv(out_paf, sep='\t', index=False, header=False, mode='a+')
 
 rule trim_break_orient_paf:

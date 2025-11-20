@@ -265,7 +265,6 @@ rule trim_bed:
         hrs = 12,
     run:
         gx_reports = input.gx_report
-        print ("gx_report",gx_reports)
         out_df = pd.DataFrame()
         mito_df = pd.read_csv(
             input.mito_bed,
@@ -296,7 +295,6 @@ rule trim_bed:
                 for x in gx_reports
             ]
         )
-        print (df_gx)
         df_gx["start_pos"] = df_gx["start_pos"] - 1
         df_gx["reason"] = "foreign_contam"
         out_df = pd.concat(
