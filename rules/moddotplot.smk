@@ -10,31 +10,40 @@ import glob
 import pysam
 
 
-configfile: 'config/config_asm_qc.yaml'
+# configfile: 'config/config_asm_qc.yaml'
 
-MANIFEST = config.get('MANIFEST', 'config/manifest.tab')
+# MANIFEST = config.get('MANIFEST', 'config/manifest.tab')
 
-raw_manifest_df = pd.read_csv(MANIFEST, sep='\t', comment='#', na_values=["","NA","na","N/A"])
+# raw_manifest_df = pd.read_csv(MANIFEST, sep='\t', comment='#', na_values=["","NA","na","N/A"])
 
-## Universial conversion of manifest df
+# ## Universial conversion of manifest df
 
-add_haps = {"H2":"hap2", "UNASSIGNED":"unassigned"}
-df_transform = list()
-for idx, row in raw_manifest_df.iterrows():
-    df_transform.append({"SAMPLE": f"%s_hap1"%row["SAMPLE"], "ASM":row["H1"]}) # required
+# add_haps = {"H2":"hap2", "UNASSIGNED":"unassigned"}
+# df_transform = list()
+# for idx, row in raw_manifest_df.iterrows():
+#     df_transform.append({"SAMPLE": f"%s_hap1"%row["SAMPLE"], "ASM":row["H1"]}) # required
 
-    for add_hap in add_haps:
-        if (add_hap in raw_manifest_df.columns) and (not pd.isna(row[add_hap])):
-            df_transform.append({"SAMPLE": f"%s_%s"%(row["SAMPLE"], add_haps[add_hap]), "ASM": row[add_hap]})
+#     for add_hap in add_haps:
+#         if (add_hap in raw_manifest_df.columns) and (not pd.isna(row[add_hap])):
+#             df_transform.append({"SAMPLE": f"%s_%s"%(row["SAMPLE"], add_haps[add_hap]), "ASM": row[add_hap]})
         
-manifest_df = pd.DataFrame(df_transform)
-manifest_df.set_index("SAMPLE", inplace=True)
+# manifest_df = pd.DataFrame(df_transform)
+# manifest_df.set_index("SAMPLE", inplace=True)
 
-BED = config.get('BED', 'config/moddot_regions.bed')
-bed_df = pd.read_csv(
-    BED, sep="\t", header=None, names=["chr", "start", "end"], dtype=str
-)
+# BED = config.get('BED', 'config/moddot_regions.bed')
+# bed_df = pd.read_csv(
+#     BED, sep="\t", header=None, names=["chr", "start", "end"], dtype=str
+# )
 
+human_acro_bed = [
+    ["chr13","0","22508596"],
+    ["chr14","0","17708411"],
+    ["chr15","0","22694466"],
+    ["chr21","0","16306378"],
+    ["chr22","0","20711065"]
+]
+
+bed_df = pd.DataFrame(human_acro_bed, columns = ["chr", "start", "end"], dtype=str)
 bed_df["NAME"] = bed_df["chr"] + "_" + (bed_df["start"].astype(int) + 1).astype(str) + "_" + bed_df["end"]
 bed_df.set_index("NAME", drop=True, inplace=True)
 
@@ -63,21 +72,22 @@ def cigar_tuple(cigar):
     return tuples
 
 def find_tigs_flag(wildcards):
-    return [ f"moddotplot/contigs/{wildcards.sample}/{region}_done" for region in bed_df.index ]
+    return [ f"results/{wildcards.sample}/moddotplot/work/find_tigs/flags/{wildcards.hap}.{region}_done" for region in bed_df.index ]
+
 def find_pq_tigs(wildcards):
-    return [ f"moddotplot/contigs/{wildcards.sample}/{region}_pq_contig.bed" for region in bed_df.index ]
+    return [ f"results/{wildcards.sample}/moddotplot/work/find_tigs/beds/{wildcards.hap}/{region}_pq_contig.bed" for region in bed_df.index ]
 
 def find_p_tigs(wildcards): 
-    return [ f"moddotplot/contigs/{wildcards.sample}/{region}_p_contig.bed" for region in bed_df.index ]
+    return [ f"results/{wildcards.sample}/moddotplot/work/find_tigs/beds/{wildcards.hap}/{region}_p_contig.bed" for region in bed_df.index ]
 
 def get_all_flag(wildcards):
-    return [ f"moddotplot/results/{wildcards.sample}/.{region}.done" for region in acros]
+    return [ f"results/{wildcards.sample}/moddotplot/work/selfplot/flags/{wildcards.hap}.{region}.done" for region in acros]
 
 rule summarize_moddot_results:
     input:
         get_all_flag
     output:
-        tsv = "stats/acro_stats/{sample}.generated_acros.tsv"
+        tsv = "results/{sample}/moddotplot/outputs/summary/{hap}.generated_acros.tsv"
     resources:
         mem=4,
         hrs=1,
@@ -85,7 +95,7 @@ rule summarize_moddot_results:
     run:
         header = ["Haplotype"]+acros
         called = [[wildcards.sample]]
-        plot_dir=f"moddotplot/results/{wildcards.sample}"
+        plot_dir=f"results/{wildcards.sample}/moddotplot/outputs/plots/{wildcards.hap}"
         for chrom in acros:
             region_name = bed_df[bed_df["chr"] == chrom].index[0]
             pdf_files = glob.glob(f"{plot_dir}/{region_name}_*_FULL.pdf")
@@ -99,10 +109,8 @@ rule summarize_moddot_results:
                 
 
 checkpoint subset_target_region:
-    input:
-        bed=BED,
     output:
-        bed="moddotplot/target_beds/{region}.bed",
+        bed="resources/acro_target_beds/{region}.bed",
     resources:
         mem=4,
         hrs=2,
@@ -114,9 +122,9 @@ checkpoint subset_target_region:
 rule liftover:
     input:
         bed=rules.subset_target_region.output.bed,
-        paf='saffire/CHM13/results/{sample}/alignments/{sample}.minimap2.paf',
+        paf="results/{sample}/saffire/outputs/trimmed_pafs/CHM13/{hap}.minimap2.trimmed.paf"
     output:
-        paf= "moddotplot/tmp/liftover/{sample}.{region}.paf",
+        paf= "results/{sample}/moddotplot/work/liftover/CHM13/pafs/{hap}/{region}.paf",
     resources:
         mem=24,
         hrs=2,
@@ -127,27 +135,11 @@ rule liftover:
         rustybam liftover --bed {input.bed} {input.paf} > {output.paf}
         """
 
-
-rule trim_paf:
-    input:
-        paf="moddotplot/tmp/liftover/{sample}.{region}.paf",
-    output:
-        paf="moddotplot/liftover/paf/{sample}/{region}.trimmed.paf",
-    resources:
-        mem=12,
-        hrs=2,
-    threads: 1
-    singularity:
-        "docker://eichlerlab/rustybam:0.1.33"
-    shell: """
-        rustybam trim-paf {input.paf} > {output.paf}
-        """
-
 rule paf_stats:
     input:
-        paf="moddotplot/liftover/paf/{sample}/{region}.trimmed.paf",
+        paf=rules.liftover.output.paf
     output:
-        stats="moddotplot/liftover/stats/{sample}/{region}.trimmed.stats",
+        stats="results/{sample}/moddotplot/work/liftover/CHM13/paf_stats/{hap}/{region}.stats",
     resources:
         mem=12,
         hrs=2,
@@ -158,105 +150,23 @@ rule paf_stats:
         rustybam stats --paf --qbed {input.paf} > {output.stats}
         """
 
-rule group_tigs:
-    input:
-        flag = find_tigs_flag,
-        paf = "saffire/CHM13/results/{sample}/alignments/{sample}.minimap2.paf",
-    output:
-        tigs = "moddotplot/liftover/stats/{sample}/lifted_contigs.tsv",
-        tab = "moddotplot/liftover/stats/{sample}/lifted_contigs.tab"
-    params:
-        p_tigs = find_p_tigs,
-        pq_tigs = find_pq_tigs,
-    threads: 1
-    resources:
-        mem=10,
-        hrs=24,
-        disk_free=1
-
-    run:
-        sample = wildcards.sample
-        input_pq_tigs = params.pq_tigs
-        input_p_tigs = params.p_tigs
-        input_paf = input.paf
-        
-        acros = ['chr13', 'chr14', 'chr15', 'chr21', 'chr22']
-        fout = open(output.tigs, 'w')
-        print('Sample\tArm\tTig\tTig_start\tTig_end\tSize\tChrom',file=fout)
-        haps = open(output.tab, 'w')
-        print('SAMPLE\tHAP', file=haps)
-        
-        qry_chrom_tracker = {}
-        qrylen_dict = {}
-        with open(input_paf) as f:
-            lines = f.read().strip().split("\n")
-        for line in lines:
-            query, query_len, query_start, query_end, strand, target, target_len, target_start, target_end, num_matches, alignment_len = line.strip().split("\t")[:11]
-            qrylen_dict[query] = query_len
-            if int(alignment_len) < 200000:
-                continue
-            if query not in qry_chrom_tracker:
-                qry_chrom_tracker[query] = []
-            if not target in qry_chrom_tracker[query]:
-                qry_chrom_tracker[query].append(target)
-
-        for pq_tig in input_pq_tigs:
-            if not os.path.getsize(pq_tig)>0:
-                continue
-            print (pq_tig)
-            region = os.path.basename(pq_tig).split("_")[0]
-            print (region)
-            with open(pq_tig) as finp_pq_tig:
-                print (pq_tig)
-                pq_tig_lines = finp_pq_tig.read().strip().split("\n")
-            for pq_tig_line in pq_tig_lines:
-                print (pq_tig_line)
-                entries = pq_tig_line.strip().split('\t')
-                print (entries)
-                print (["entry",entries[0]])
-                print ("qrylen_dict",qrylen_dict)
-                qlen = qrylen_dict[entries[0]]
-                print (qlen)
-                print(f"{sample}\tpq\t{entries[0]}\t{entries[1]}\t{entries[2]}\t{qlen}\t{region}")
-                print (f'moddotplot/fasta/{sample}/{region}_pq_contig.fa')
-                print(f"{sample}\tpq\t{entries[0]}\t{entries[1]}\t{entries[2]}\t{qlen}\t{region}", file=fout)
-                print(pq_tig, file=haps)
-
-        for p_tig in input_p_tigs:
-            if not os.path.getsize(p_tig)>0:
-                continue
-            with open(p_tig) as finp_p_tig:
-                p_tig_lines = finp_p_tig.read().strip().split("\n")
-            for p_tig_line in p_tig_lines:
-                entries = p_tig_line.strip().split('\t')
-                qlen = qrylen_dict[entries[0]]
-                not_acro = False
-                for ele in qry_chrom_tracker[entries[0]]:
-                    if ele not in acros:
-                        not_acro = True
-                        break
-                if not not_acro:
-                    print(f"{sample}\tp\t{entries[0]}\t{entries[1]}\t{entries[2]}\t{qlen}\t{region}", file=fout)
-
-        fout.close()
-        haps.close()
-
 rule tag_contigs:
     input:
-        paf = "moddotplot/liftover/paf/{sample}/{region}.trimmed.paf"
+        paf = "results/{sample}/saffire/outputs/trimmed_pafs/CHM13/{hap}.minimap2.trimmed.paf",
+        paf_stats = rules.paf_stats.output.stats
     output:
-        flag = "results/{asm}/moddotplot/work/flags/{sample}/{region}.pq_contig.done"
+        flag = "results/{sample}/moddotplot/work/find_tigs/flags/{hap}.{region}.pq_contig.done"
     params:
-        pq = "moddotplot/contigs/{sample}/{region}_pq_contig.bed",
-        p = "moddotplot/contigs/{sample}/{region}_p_contig.bed",
-        aln = "moddotplot/contigs/{sample}/{region}_contig_aln.paf",
+        pq = "results/{sample}/moddotplot/work/find_tigs/beds/{hap}/{region}_pq_contig.bed",
+        p = "results/{sample}/moddotplot/work/find_tigs/beds/{hap}/{region}_p_contig.bed",
+        aln = "results/{sample}/moddotplot/work/find_tigs/pafs/{hap}/{region}_contig_aln.paf",
     threads: 1,
     resources:
         mem=10,
         hrs=24,
         disk_free=1
     run:
-        os.makedirs(f"moddotplot/contigs/{wildcards.sample}", exist_ok=True)
+        os.makedirs(f"results/{wildcards.sample}/moddotplot/work/find_tigs/pafs/{wildcards.hap}", exist_ok=True)
         centro_dict = {
                 'chr13': {
                     'p' : (15547593, 16522942),
@@ -382,11 +292,11 @@ rule tag_contigs:
 rule get_pq_fa:
     input:
         flag = rules.tag_contigs.output.flag,
-        hap = "results/{asm}/fcs/outputs/{sample}.fasta"
-    output:
-        fa = "results/{asm}/moddotplot/work/fasta_files/{sample}/{region}.pq_contig.fa",
+        hap = rules.rename_fasta.output.final_fasta
+    output: 
+        fa = "results/{sample}/moddotplot/work/get_pq_tigs/fasta/{hap}/{region}.pq_contig.fa",
     params:
-        bed="moddotplot/contigs/{sample}/{region}_pq_contig.bed",
+        bed="results/{sample}/moddotplot/work/find_tigs/beds/{region}_pq_contig.bed",
         region_name = get_region_name        
     resources:
         mem=10,
@@ -416,12 +326,12 @@ rule get_pq_fa:
 
 rule pq_selfplot:
     input:
-        flag = "results/{asm}/moddotplot/work/flags/{sample}/{region}.pq_contig.done",
+        flag = rules.tag_contigs.output.flag,
         fa = rules.get_pq_fa.output.fa,
     output:
-        flag = "results/{asm}/moddotplot/work/flags/{sample}/{region}.moddotplot.done"
+        flag = "results/{sample}/moddotplot/work/selfplot/flags/{hap}.{region}.done"
     params:
-        bed = "results/{asm}/moddotplot/work/bed_files/{sample}/{region}.pq_contig.bed",
+        bed = "results/{sample}/moddotplot/work/find_tigs/beds/{hap}/{region}_pq_contig.bed"
     resources:
         mem=10,
         hrs=24,
@@ -430,7 +340,7 @@ rule pq_selfplot:
     singularity:
         "docker://eichlerlab/moddotplot:0.9.0"
     shell: """
-        outdir=$(dirname {output.flag} | sed 's/work\/flags/outputs/g')
+        outdir=$(dirname {output.flag} | sed "s/work\/selfplot\/flags/outputs\/plots\/{wildcards.hap}/g")
         if [[ ! -d $outdir ]];then
             mkdir -p $outdir
         fi
@@ -441,3 +351,88 @@ rule pq_selfplot:
             echo "{wildcards.sample} {wildcards.region}" > {output.flag}
         fi
         """
+
+
+
+# rule group_tigs:
+#     input:
+#         flag = find_tigs_flag,
+#         paf = "results/{sample}/saffire/outputs/trimmed_pafs/CHM13/{hap}.minimap2.trimmed.paf",
+#     output:
+#         tigs = "results/{sample}/moddotplot/work/liftover/CHM13/contig_stats/{hap}.lifted_contigs.tsv",
+#         tab = "results/{sample}/moddotplot/work/liftover/CHM13/contig_stats/{hap}.lifted_contigs.tab"
+#     params:
+#         p_tigs = find_p_tigs,
+#         pq_tigs = find_pq_tigs,
+#     threads: 1
+#     resources:
+#         mem=10,
+#         hrs=24,
+#         disk_free=1
+
+#     run:
+#         sample = wildcards.sample
+#         input_pq_tigs = params.pq_tigs
+#         input_p_tigs = params.p_tigs
+#         input_paf = input.paf
+        
+#         acros = ['chr13', 'chr14', 'chr15', 'chr21', 'chr22']
+#         fout = open(output.tigs, 'w')
+#         print('Sample\tArm\tTig\tTig_start\tTig_end\tSize\tChrom',file=fout)
+#         haps = open(output.tab, 'w')
+#         print('SAMPLE\tHAP', file=haps)
+        
+#         qry_chrom_tracker = {}
+#         qrylen_dict = {}
+#         with open(input_paf) as f:
+#             lines = f.read().strip().split("\n")
+#         for line in lines:
+#             query, query_len, query_start, query_end, strand, target, target_len, target_start, target_end, num_matches, alignment_len = line.strip().split("\t")[:11]
+#             qrylen_dict[query] = query_len
+#             if int(alignment_len) < 200000:
+#                 continue
+#             if query not in qry_chrom_tracker:
+#                 qry_chrom_tracker[query] = []
+#             if not target in qry_chrom_tracker[query]:
+#                 qry_chrom_tracker[query].append(target)
+
+#         for pq_tig in input_pq_tigs:
+#             if not os.path.getsize(pq_tig)>0:
+#                 continue
+#             print (pq_tig)
+#             region = os.path.basename(pq_tig).split("_")[0]
+#             print (region)
+#             with open(pq_tig) as finp_pq_tig:
+#                 print (pq_tig)
+#                 pq_tig_lines = finp_pq_tig.read().strip().split("\n")
+#             for pq_tig_line in pq_tig_lines:
+#                 print (pq_tig_line)
+#                 entries = pq_tig_line.strip().split('\t')
+#                 print (entries)
+#                 print (["entry",entries[0]])
+#                 print ("qrylen_dict",qrylen_dict)
+#                 qlen = qrylen_dict[entries[0]]
+#                 print (qlen)
+#                 print(f"{sample}\tpq\t{entries[0]}\t{entries[1]}\t{entries[2]}\t{qlen}\t{region}")
+#                 print (f'moddotplot/fasta/{sample}/{region}_pq_contig.fa')
+#                 print(f"{sample}\tpq\t{entries[0]}\t{entries[1]}\t{entries[2]}\t{qlen}\t{region}", file=fout)
+#                 print(pq_tig, file=haps)
+
+#         for p_tig in input_p_tigs:
+#             if not os.path.getsize(p_tig)>0:
+#                 continue
+#             with open(p_tig) as finp_p_tig:
+#                 p_tig_lines = finp_p_tig.read().strip().split("\n")
+#             for p_tig_line in p_tig_lines:
+#                 entries = p_tig_line.strip().split('\t')
+#                 qlen = qrylen_dict[entries[0]]
+#                 not_acro = False
+#                 for ele in qry_chrom_tracker[entries[0]]:
+#                     if ele not in acros:
+#                         not_acro = True
+#                         break
+#                 if not not_acro:
+#                     print(f"{sample}\tp\t{entries[0]}\t{entries[1]}\t{entries[2]}\t{qlen}\t{region}", file=fout)
+
+#         fout.close()
+#         haps.close()

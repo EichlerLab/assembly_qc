@@ -22,13 +22,13 @@ nt_df_header = ["sample","asm_type","haplotype","total_num_of_contigs","num_of_c
 def get_nt_length(fasta):
     fasta_name = os.path.basename(fasta)
 
-    if re.search("/contig_fasta/", fasta):
-        asm_type = "contig"
-        haplotype = "idk_yet"
-    elif re.search("/full_genome/", fasta):
+    if re.search("/full_genome/", fasta):
         asm_type = "full_genome"
         haplotype = "all"
         sample = fasta_name.replace(".fasta","")
+    elif (re.search("/contig_fasta/", fasta)) and (not re.search("/full_genome/", fasta)):
+        asm_type = "contig"
+        haplotype = "idk_yet"
     else:
         asm_type = "scaffold"
         haplotype = "idk_yet"

@@ -17,6 +17,8 @@ INCLUDE_MITO = bool(config.get("INCLUDE_MITO", False))
 REF_DICT = config["REF"]
 ALIGNER = config.get('ALIGNER',"minimap2")
 
+
+
 ## functions =========
 
 def get_asm_manifest_df(manifest_df):
@@ -80,6 +82,17 @@ def get_fasta_stats_outputs(wildcards):
     sample = wildcards.sample
     return f"results/{sample}/stats/outputs/summary/{sample}.summary.stats"
 
+def get_moddotplot_outputs(wildcards):
+    if not int(TAXID) == 9606:
+        final_outputs = []
+    else:
+        sample = wildcards.sample
+        sample_sub = groups[groups["SAMPLE"] == sample]
+        final_outputs = [
+            f"results/{sample}/moddotplot/outputs/summary/{row.HAP}.generated_acros.tsv"
+            for idx, row in sample_sub.iterrows()
+        ]
+    return final_outputs
 ## ==================
 
 
@@ -121,7 +134,8 @@ rule gather_outputs_per_sample:
         get_merqury_final_outputs,
         get_saffire_final_outputs,
         get_compleasm_final_outputs,
-        get_fasta_stats_outputs
+        get_fasta_stats_outputs,
+        get_moddotplot_outputs
     output:
         flag = touch("results/{sample}/outputs/all_done")
 
@@ -133,6 +147,7 @@ include: "rules/merqury.smk"
 include: "rules/saffire.smk"
 include: "rules/compleasm.smk"
 include: "rules/fasta_stats.smk"
+include: "rules/moddotplot.smk"
 
 
 ##=========================

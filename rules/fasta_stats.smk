@@ -373,47 +373,88 @@ rule summarize_full_genome_stats:
             df_hap["hap"] = hap
             df_all_hap = pd.concat([df_all_hap, df_hap])
         df_all_hap.set_index("hap",drop=True, inplace=True)
+
         if len(df_all_hap) == 1:
             ploidy = "Haploid"
         elif len(df_all_hap) == 2:
             ploidy = "Diploid"
-        else:
-            ploidy = "Aneuploid"
+        elif len(df_all_hap) > 2:
+            ploidy = "Aneuplod"
+
         qv_df = pd.read_csv(input.sample_qv, sep="\t", header=None, names=["haplotype","error_count", "total_count", "qv","error_rate"]).set_index("haplotype")
-        qv = float(qv_df.loc["Both","qv"])
+        try:
+            quality_value = float(qv_df.loc["Both","qv"])
+        except KeyError:
+            quality_value = float(qv_df.iloc[0]["qv"])
         
         # following the DSA metadata sheet (v1.2.0)
-        header = ["contig_l50","contig_n50","description","gaps_between_scaffolds","gc_content","genome_size","largest_contig_size","number_of_chromosomes","number_of_contigs","number_of_scaffolds", \
+        header = ["assembly","contig_l50","contig_n50","description","gaps_between_scaffolds","gc_content","genome_size","largest_contig_size","number_of_chromosomes","number_of_contigs","number_of_scaffolds", \
                 "percent_fragmented_hap1","percent_fragmented_hap2","percent_missing_hap1","percent_missing_hap2","percent_multi_copy_hap1","percent_multi_copy_hap2","percent_single_copy_hap1","percent_single_copy_hap2",\
                 "ploidy","quality_value","scaffold_l50","scaffold_n50","total_ungapped_length"
             ]
+
+        contig_l50 = df_full_genome_contig_stats.iloc[0]["l50"]
+        contig_n50 = df_full_genome_contig_stats.iloc[0]["n50"]
+        description = "-"
+        gaps_between_scaffolds = df_full_genome_stats.iloc[0]["number_of_gaps"]
+        gc_content = df_full_genome_contig_stats.iloc[0]["gc_content"]
+        genome_size = df_full_genome_stats.iloc[0]["bases"]
+        largest_contig_size = df_full_genome_contig_stats.iloc[0]["largest_size"]
+        number_of_chromosomes = "-"
+        number_of_contigs = (int(df_full_genome_stats.iloc[0]["total_num_of_contigs"])-int(df_full_genome_stats.iloc[0]["num_of_contigs_with_N"]))
+        number_of_scaffolds = df_full_genome_stats.iloc[0]["num_of_contigs_with_N"]
+        percent_fragmented_hap1 = df_all_hap.loc["hap1", "percent_fragmented_copy"]
+        try:
+            percent_fragmented_hap2 = df_all_hap.loc["hap2", "percent_fragmented_copy"]
+        except KeyError:
+            percent_fragmented_hap2 = "NA"
+
+        percent_missing_hap1 = df_all_hap.loc["hap1", "percent_missing_copy"]
+        try:
+            percent_missing_hap2 = df_all_hap.loc["hap2", "percent_missing_copy"]
+        except KeyError:
+            percent_missing_hap2 = "NA"
+        percent_multi_copy_hap1 = df_all_hap.loc["hap1", "percent_multi_copy"]
+        try:
+            percent_multi_copy_hap2 = df_all_hap.loc["hap2", "percent_multi_copy"]
+        except KeyError:
+            percent_multi_copy_hap2 = "NA"
+        percent_single_copy_hap1 = df_all_hap.loc["hap1", "percent_single_copy"]
+        try:
+            percent_single_copy_hap2 = df_all_hap.loc["hap2", "percent_single_copy"]
+        except KeyError:
+            percent_single_copy_hap2 = "NA"
+        scaffold_l50 = df_full_genome_stats.iloc[0]["l50"]
+        scaffold_n50 = df_full_genome_stats.iloc[0]["n50"]
+        total_ungapped_length = df_full_genome_contig_stats.iloc[0]["bases"]
+
         metrics = [[wildcards.sample,
-            df_full_genome_contig_stats.iloc[0]["l50"],
-            df_full_genome_contig_stats.iloc[0]["n50"],
-            "-",
-            df_full_genome_stats.iloc[0]["l50"],
-            df_full_genome_stats.iloc[0]["number_of_gaps"],
-            df_full_genome_contig_stats.iloc[0]["gc_content"],
-            df_full_genome_stats.iloc[0]["bases"],
-            df_full_genome_contig_stats.iloc[0]["largest_size"],
-            "-",
-            (int(df_full_genome_stats.iloc[0]["total_num_of_contigs"])-int(df_full_genome_stats.iloc[0]["num_of_contigs_with_N"])),
-            df_full_genome_stats.iloc[0]["num_of_contigs_with_N"],
-            df_all_hap.loc["hap1", "percent_fragmented_copy"],
-            df_all_hap.loc["hap2", "percent_fragmented_copy"],
-            df_all_hap.loc["hap1", "percent_missing_copy"],
-            df_all_hap.loc["hap2", "percent_missing_copy"],
-            df_all_hap.loc["hap1", "percent_multi_copy"],
-            df_all_hap.loc["hap2", "percent_multi_copy"],
-            df_all_hap.loc["hap1", "percent_single_copy"],
-            df_all_hap.loc["hap2", "percent_single_copy"],
+            contig_l50,
+            contig_n50,
+            description,
+            gaps_between_scaffolds,
+            gc_content,
+            genome_size,
+            largest_contig_size,
+            number_of_chromosomes,
+            number_of_contigs,
+            number_of_scaffolds,
+            percent_fragmented_hap1,
+            percent_fragmented_hap2,
+            percent_missing_hap1,
+            percent_missing_hap2,
+            percent_multi_copy_hap1,
+            percent_multi_copy_hap2,
+            percent_single_copy_hap1,
+            percent_single_copy_hap2,
             ploidy,
-            qv,
-            df_full_genome_stats.iloc[0]["l50"],
-            df_full_genome_stats.iloc[0]["n50"],
-            df_full_genome_contig_stats.iloc[0]["bases"]
+            quality_value,
+            scaffold_l50,
+            scaffold_n50,
+            total_ungapped_length
         ]]
-        outdf = pd.DataFrame(metrics, names=header)
+
+        outdf = pd.DataFrame(metrics, columns=header)
         outdf.to_csv(output.full_genome_stats, sep="\t", index=False)
 
 
