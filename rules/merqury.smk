@@ -188,11 +188,11 @@ rule merqury_script:
         sample_all = " ".join(haps_abs)
         unassigned_contig = params.unassigned_contig
         with open(output.run_script, "w") as outfile:
-            outfile.write("#!/usr/bin/env bash \n")
+            outfile.write("#!/usr/bin/env bash \nset -e\n")
             outfile.write(f"merqury.sh {meryl_abs} {sample_all} {wildcards.sample}\n")
             if os.path.isfile(unassigned_contig):
                 unassigned_abs = os.path.abspath(unassigned_contig)
-                outfile.write(f"merqury.sh {meryl_abs} {unassigned_abs} {wildcards.sample}_unassigned\n")
+                outfile.write(f"merqury.sh {meryl_abs} {unassigned_abs} {wildcards.sample}_un\n")
         os.chmod(output.run_script, 0o755)
 
 
@@ -204,14 +204,24 @@ rule merqury_run:
     resources:
         mem=lambda wildcards, attempt: (2 ** (attempt-1)) * 4,
         hrs=96,
+    params:
+        un_qv = "results/{sample}/merqury/outputs/{sample}_un.qv",
     threads: 16
     singularity:
         "docker://eichlerlab/merqury:1.3.1"
     shell: """ 
+        set -euo pipefail
+
+        if [[ -f {params.un_qv} ]];then
+          rm -f {params.un_qv}
+        fi
+
         outdir="$(dirname {output.qv})"
         mkdir -p $outdir
         merqury_sh=$(realpath {input.run_script})
-        pushd $outdir; $merqury_sh; popd
+        pushd $outdir
+        $merqury_sh
+        popd
         """
 
 
@@ -229,6 +239,7 @@ rule hapmers:
     singularity:
         "docker://eichlerlab/merqury:1.3.1"
     shell: """
+        set -euo pipefail
         currdir=$(pwd)
         outdir=$(dirname {output.inherited_hist})
         mkdir -p $outdir
@@ -266,7 +277,7 @@ rule merqury_trio_script:
         )
         out_sample_name = "_".join([wildcards.sample, "trio"])
         with open(output.run_script, "w") as outfile:
-            outfile.write("#!/usr/bin/env bash \n")
+            outfile.write("#!/usr/bin/env bash \nset -e\n")
             outfile.write(f"merqury.sh {meryl_all} {sample_all} {out_sample_name}\n")
         os.chmod(output.run_script, 0o755)
 
@@ -283,6 +294,8 @@ rule merqury_trio_run:
     singularity:
         "docker://eichlerlab/merqury:1.3.1"
     shell: """
+        set -euo pipefail    
+
         outdir="$(dirname {output.png})"
         mkdir -p $outdir
         merqury_sh=$(realpath {input.run_script})

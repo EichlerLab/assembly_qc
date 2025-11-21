@@ -16,21 +16,29 @@ fasta_file = snakemake.input.fasta
 telo_tbl = snakemake.input.telo_tbl
 output_file = snakemake.output.stats
 
-nt_df_header = ["sample","asm_type","haplotype","total_num_of_contigs","num_of_contigs_with_N","bases","ungapped_bases","cnt_A","cnt_T","cnt_G","cnt_C","cnt_N","fai"]
+nt_df_header = ["sample","asm_type","haplotype","total_num_of_contigs","num_of_contigs_with_N","bases","ungapped_bases","number_of_gaps","cnt_A","cnt_T","cnt_G","cnt_C","cnt_N","fai"]
 
 
 def get_nt_length(fasta):
-    
+    fasta_name = os.path.basename(fasta)
+
     if re.search("/contig_fasta/", fasta):
         asm_type = "contig"
+        haplotype = "idk_yet"
+    elif re.search("/full_genome/", fasta):
+        asm_type = "full_genome"
+        haplotype = "all"
+        sample = fasta_name.replace(".fasta","")
     else:
         asm_type = "scaffold"
-    fasta_name = os.path.basename(fasta)
-    for hap_tag in ["_hap1.fasta","_hap2.fasta","_un.fasta"]:
-        if re.search(hap_tag, fasta_name):
-            sample = fasta_name.replace(hap_tag,"")
-            haplotype = hap_tag.split("_")[1].split(".")[0]
-            break
+        haplotype = "idk_yet"
+    
+    if not haplotype == "all":
+        for hap_tag in ["_hap1.fasta","_hap2.fasta","_un.fasta"]:
+            if re.search(hap_tag, fasta_name):
+                sample = fasta_name.replace(hap_tag,"")
+                haplotype = hap_tag.split("_")[1].split(".")[0]
+                break
     
     fai = f"{fasta}.fai"
 
@@ -43,6 +51,7 @@ def get_nt_length(fasta):
     ungapped_bases = 0
     num_of_contigs = 0
     num_of_scaffolds = 0
+    number_of_gaps = 0
 
     with pysam.FastaFile(fasta) as asm_fasta:
         for ref in asm_fasta.references:
@@ -55,11 +64,12 @@ def get_nt_length(fasta):
             cnt_N += ref_cnt_N
             bases += ref_bases
             ungapped_bases += (ref_bases-ref_cnt_N)
+            number_of_gaps += len(re.findall(r"N+", asm_fasta.fetch(ref).upper()))
             num_of_contigs += 1
             if ref_cnt_N > 0:
                 num_of_scaffolds += 1
                 
-    data_set = [sample, asm_type, haplotype, num_of_contigs, num_of_scaffolds, bases, ungapped_bases, cnt_A, cnt_T, cnt_G, cnt_C, cnt_N, fai]
+    data_set = [sample, asm_type, haplotype, num_of_contigs, num_of_scaffolds, bases, ungapped_bases, number_of_gaps, cnt_A, cnt_T, cnt_G, cnt_C, cnt_N, fai]
     
     return pd.DataFrame([data_set],columns = nt_df_header)
 
@@ -103,7 +113,7 @@ def main():
     contig_stats_header = ["over_100k_bases", "l50", "n50", "largest_size", "aun"]
     nt_df[contig_stats_header] = nt_df["fai"].apply(get_contig_stats)
     nt_df["num_of_near_t2t_contigs"] = num_t2t
-    nt_df = nt_df[["sample","asm_type","haplotype","total_num_of_contigs","num_of_contigs_with_N","num_of_near_t2t_contigs","bases","gc_content","l50", "n50", "largest_size", "aun"]]
+    nt_df = nt_df[["sample","asm_type","haplotype","total_num_of_contigs","num_of_contigs_with_N","num_of_near_t2t_contigs","bases","number_of_gaps","gc_content","l50", "n50", "largest_size", "aun"]]
     nt_df.to_csv(output, sep="\t", index=None, header=True)
     
 

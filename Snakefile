@@ -13,6 +13,7 @@ IDEO_PLOT_SCRIPT = "/net/eichler/vol28/7200/software/pipelines/compteam_tools/id
 N50_SCRIPT = "/net/eichler/vol28/7200/software/pipelines/compteam_tools/n50"
 PLOIDY_PLOT_SCRIPT = f"{SNAKEMAKE_DIR}/scripts/ploidy.R"
 TAXID = config.get("TAXID", "9606")
+INCLUDE_MITO = bool(config.get("INCLUDE_MITO", False))
 REF_DICT = config["REF"]
 ALIGNER = config.get('ALIGNER',"minimap2")
 
@@ -33,13 +34,16 @@ def get_asm_manifest_df(manifest_df):
 def get_fcs_final_outputs(wildcards):
     sample = wildcards.sample
     sample_sub = groups[groups["SAMPLE"] == sample]
-    return [
+    outputs = [
         f"results/{sample}/contamination_screening/outputs/final_fasta/{sample}_{row.HAP}.fasta"
         for idx, row in sample_sub.iterrows()
-    ] + [
-        f"results/{sample}/contamination_screening/outputs/mito_fasta/{row.HAP}-mt.fasta"
-        for idx, row in sample_sub.iterrows()
     ]
+    if INCLUDE_MITO and (int(TAXID) == 9696):
+        outputs += [
+            f"results/{sample}/contamination_screening/outputs/mito_fasta/{row.HAP}-mt.fasta"
+            for idx, row in sample_sub.iterrows()
+        ]
+    return outputs
 
 def get_merqury_final_outputs(wildcards):
     sample = wildcards.sample
@@ -74,12 +78,7 @@ def get_compleasm_final_outputs(wildcards):
 
 def get_fasta_stats_outputs(wildcards):
     sample = wildcards.sample
-    sample_sub = groups[groups["SAMPLE"] == sample]
-    final_outputs = [
-        f"results/{sample}/stats/outputs/summary_by_hap/{row.HAP}.summary.stats"
-        for idx, row in sample_sub.iterrows()
-    ]
-    return final_outputs
+    return f"results/{sample}/stats/outputs/summary/{sample}.summary.stats"
 
 ## ==================
 
