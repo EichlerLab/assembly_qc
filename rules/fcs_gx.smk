@@ -346,8 +346,9 @@ rule coerce_bed:
         mem = 4,
         hrs = 12,
     singularity: "docker://eichlerlab/binf-basics:0.1"
+    # removed sort to keep the order of contig names
     shell: """
-        bedtools complement -i <( sort -k1,1 -k2,2n {input.trim_file} ) -g <( sort -k1 {input.filt_fai} ) | awk '{{if ( $3 - $2 > 1000 ) print $1":"$2+1"-"$3}}' | sort > {output.regions_file}
+        bedtools complement -i {input.trim_file} -g {input.filt_fai}| awk '{{if ( $3 - $2 > 1000 ) print $1":"$2+1"-"$3}}' > {output.regions_file}
         """
 
 

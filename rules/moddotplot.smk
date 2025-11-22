@@ -122,7 +122,7 @@ checkpoint subset_target_region:
 rule liftover:
     input:
         bed=rules.subset_target_region.output.bed,
-        paf="results/{sample}/saffire/outputs/trimmed_pafs/CHM13/{hap}.minimap2.trimmed.paf"
+        paf="results/{sample}/saffire/work/alignments/CHM13/pafs/{hap}.minimap2.paf"
     output:
         paf= "results/{sample}/moddotplot/work/liftover/CHM13/pafs/{hap}/{region}.paf",
     resources:
@@ -135,9 +135,24 @@ rule liftover:
         rustybam liftover --bed {input.bed} {input.paf} > {output.paf}
         """
 
+rule trim_paf_moddot:
+    input:
+        paf= rules.liftover.output.paf
+    output:
+        paf = "results/{sample}/moddotplot/work/liftover/CHM13/trimmed_pafs/{hap}/{region}.paf"
+    threads: 8
+    singularity:
+        "docker://eichlerlab/rustybam:0.1.33"
+    resources:
+        mem = 12,
+        hrs = 48
+    shell: """
+        rustybam trim-paf {input.paf} > {output.paf}
+        """
+
 rule paf_stats:
     input:
-        paf=rules.liftover.output.paf
+        paf=rules.trim_paf_moddot.output.paf
     output:
         stats="results/{sample}/moddotplot/work/liftover/CHM13/paf_stats/{hap}/{region}.stats",
     resources:
@@ -152,7 +167,7 @@ rule paf_stats:
 
 rule tag_contigs:
     input:
-        paf = "results/{sample}/saffire/outputs/trimmed_pafs/CHM13/{hap}.minimap2.trimmed.paf",
+        paf = rules.trim_paf_moddot.output.paf,
         paf_stats = rules.paf_stats.output.stats
     output:
         flag = "results/{sample}/moddotplot/work/find_tigs/flags/{hap}.{region}.pq_contig.done"
@@ -167,6 +182,7 @@ rule tag_contigs:
         disk_free=1
     run:
         os.makedirs(f"results/{wildcards.sample}/moddotplot/work/find_tigs/pafs/{wildcards.hap}", exist_ok=True)
+        os.makedirs(f"results/{wildcards.sample}/moddotplot/work/find_tigs/beds/{wildcards.hap}", exist_ok=True)
         centro_dict = {
                 'chr13': {
                     'p' : (15547593, 16522942),
@@ -296,7 +312,7 @@ rule get_pq_fa:
     output: 
         fa = "results/{sample}/moddotplot/work/get_pq_tigs/fasta/{hap}/{region}.pq_contig.fa",
     params:
-        bed="results/{sample}/moddotplot/work/find_tigs/beds/{region}_pq_contig.bed",
+        bed="results/{sample}/moddotplot/work/find_tigs/beds/{hap}/{region}_pq_contig.bed",
         region_name = get_region_name        
     resources:
         mem=10,
