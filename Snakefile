@@ -91,6 +91,9 @@ def get_moddotplot_outputs(wildcards):
         final_outputs = [
             f"results/{sample}/moddotplot/outputs/summary/{row.HAP}.generated_acros.tsv"
             for idx, row in sample_sub.iterrows()
+        ] + [
+            f"results/{sample}/moddotplot/outputs/contig_stats/{row.HAP}.CHM13_lifted_contigs.tsv"
+            for idx, row in sample_sub.iterrows()
         ]
     return final_outputs
 ## ==================

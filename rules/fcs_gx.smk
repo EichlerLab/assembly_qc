@@ -253,6 +253,7 @@ rule extract_mito:
 
 rule trim_bed:
     input:
+        filt_fai = rules.remove_short_contigs.output.filtered_fai,
         gx_report = find_gx_report,
         flag = rules.run_fcs_gx.output.flag,
         adapt_report = rules.run_fcs_adapter.output.report_txt,
@@ -264,6 +265,15 @@ rule trim_bed:
         mem = 16,
         hrs = 12,
     run:
+        fai_df = pd.read_csv(
+            input.filt_fai,
+            sep="\t",
+            header=None,
+            names=["#seq_id", "length", "offset", "linebases", "linewidth"],
+        )
+        order = fai_df["#seq_id"].tolist()
+        order_map = {seq: i for i, seq in enumerate(order)}
+
         gx_reports = input.gx_report
         out_df = pd.DataFrame()
         mito_df = pd.read_csv(
@@ -330,6 +340,12 @@ rule trim_bed:
             out_df = pd.concat(
                 [out_df, df_adapt_exc[["#seq_id", "start_pos", "end_pos", "reason"]]]
             )
+
+        out_df["sort_key"] = out_df["#seq_id"].map(order_map)
+        out_df = (
+            out_df.sort_values(["sort_key","start_pos"]).drop(columns="sort_key")
+        )
+
         out_df[["#seq_id", "start_pos", "end_pos", "reason"]].to_csv(
             output.trim_file, sep="\t", header=False, index=False
         )
