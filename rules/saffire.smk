@@ -115,7 +115,7 @@ rule make_bed:
         paf = rules.trim_paf.output.paf,
         genome_index = "resources/reference/{ref}/genome_index.txt"
     output:
-        bed = "results/{sample}/saffire/work/alignments/{ref}/beds/{hap}.bed",
+        bed = "results/{sample}/saffire/work/alignments/{ref}/beds/{hap}.{aligner}.bed",
     wildcard_constraints:
         ref='[A-Za-z0-9_-]+',              
     threads: 1

@@ -96,6 +96,23 @@ def get_moddotplot_outputs(wildcards):
             for idx, row in sample_sub.iterrows()
         ]
     return final_outputs
+
+def get_plots_outputs(wildcards):
+    sample = wildcards.sample
+    sample_sub = groups[groups["SAMPLE"] == sample]
+    final_outputs = [
+        f"results/{sample}/plots/outputs/contig_length/{row.HAP}.scaffold.scatter_logged.png"
+        for idx, row in sample_sub.iterrows()
+    ] + [
+        f"results/{sample}/plots/outputs/ideo/{ref}/pdf/{sample}.minimap2.ideoplot.pdf"
+        for idx, row in sample_sub.iterrows()
+        for ref in REF_DICT
+    ] + [
+        f"results/{sample}/plots/outputs/ploidy/{ref}/pdf/{sample}.minimap2.ploidy.pdf"
+        for idx, row in sample_sub.iterrows()
+        for ref in REF_DICT
+    ]
+    return final_outputs
 ## ==================
 
 
@@ -138,19 +155,20 @@ rule gather_outputs_per_sample:
         get_saffire_final_outputs,
         get_compleasm_final_outputs,
         get_fasta_stats_outputs,
-        get_moddotplot_outputs
+        get_moddotplot_outputs,
+        get_plots_outputs
     output:
         flag = touch("results/{sample}/outputs/all_done")
 
 
 ##===include MUST BE HERE.
-include: "rules/common_functions.smk"
 include: "rules/fcs_gx.smk"
 include: "rules/merqury.smk"
 include: "rules/saffire.smk"
 include: "rules/compleasm.smk"
 include: "rules/fasta_stats.smk"
 include: "rules/moddotplot.smk"
+include: "rules/plots.smk"
 
 
 ##=========================

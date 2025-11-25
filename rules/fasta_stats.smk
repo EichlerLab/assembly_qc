@@ -55,13 +55,6 @@ def find_all_hap_summary(wildcards):
     ]
     return outputs[0] if len(outputs) == 1 else outputs
 
-def find_all_telo_tsvs(wildcards):
-    telo_haps = [f"{wildcards.asm}_hap1"]
-    if not pd.isna(raw_manifest_df.at[wildcards.asm, "H2"]):
-        telo_haps.append(f"{wildcards.asm}_hap2")
-    telo_tsvs = [f"stats/telo/{sample_hap}.scaffold.telo.tsv" for sample_hap in telo_haps] + [f"stats/telo/{sample_hap}.contig.telo.tsv" for sample_hap in telo_haps]
-    return telo_tsvs
-
 rule split_scaffolds:
     input:
         scaffold_fasta=rules.rename_fasta.output.final_fasta,
@@ -456,5 +449,3 @@ rule summarize_full_genome_stats:
 
         outdf = pd.DataFrame(metrics, columns=header)
         outdf.to_csv(output.full_genome_stats, sep="\t", index=False)
-
-

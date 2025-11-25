@@ -141,7 +141,7 @@ rule tag_contigs:
         hrs=24,
         disk_free=1
     script:
-        "scripts/tag_contigs.py"
+        f"{SNAKEMAKE_DIR}/scripts/tag_contigs.py"
 
 rule get_pq_fa:
     input:
