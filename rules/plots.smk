@@ -21,13 +21,18 @@ def find_all_bed_set(wildcards):
 
 
 def find_all_saf_paf(wildcards):
-    avail_pafs = []
-    haps = ["hap1","hap2","un"]
-    values = full_manifest_df.loc[wildcards.sample][["H1","H2","UNASSIGNED"]].tolist()
-    for idx, hap in enumerate(haps):
-        if not str(values[idx]) == "nan":
-            avail_pafs.append (f"results/{wildcards.sample}/saffire/outputs/trimmed_pafs/{wildcards.ref}/{hap}.minimap2.trimmed.paf")
-    return avail_pafs[0] if len(avail_pafs) == 1 else avail_pafs
+    try:
+        h2_val = full_manifest_df.at[wildcards.sample, "H2"]
+    except KeyError:
+        h2_val = None 
+
+    has_h2 = isinstance(h2_val, str) and h2_val.strip() != "" and os.path.isfile(h2_val)
+    haps = ["hap1", "hap2"] if has_h2 else ["hap1"]
+    outputs = [
+        f"results/{wildcards.sample}/saffire/work/alignments/{wildcards.ref}/pafs/{hap}.minimap2.paf"
+        for hap in haps
+    ]
+    return outputs[0] if len(outputs) == 1 else outputs
 
 rule get_scaffold_length_plot:
     input:

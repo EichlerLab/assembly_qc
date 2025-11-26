@@ -10,8 +10,6 @@ MINIMAP_PARAMS = config.get('MINIMAP_PARAMS', '-x asm20 -m 10000 -z 10000,50 -r 
 MANIFEST = config.get('MANIFEST', 'config/manifest.tab')
 SV_SIZE = config.get('SV_SIZE', '30000')
 
-ALIGNER = config.get('ALIGNER',"minimap2")
-
 #-----------------------------------------
 
 
@@ -23,7 +21,7 @@ def find_ref_fa(wildcards):
     return REF_DICT[wildcards.ref]["PATH"]
 
 def find_contigs(wildcards):
-    return gather.split("results/{sample}/saffire/work/split_paf/{ref}/tmp/{hap}.{aligner}.{scatteritem}.broken.paf", sample=wildcards.sample, ref=wildcards.ref, hap=wildcards.hap, aligner=wildcards.aligner)
+    return gather.split("results/{sample}/saffire/work/split_paf/{ref}/tmp/{hap}.minimap2.{scatteritem}.broken.paf", sample=wildcards.sample, ref=wildcards.ref, hap=wildcards.hap)
 
 def find_all_trimmed_paf(wildcards):
     avail_pafs = []
@@ -31,7 +29,7 @@ def find_all_trimmed_paf(wildcards):
     values = full_manifest_df.loc[wildcards.sample][["H1","H2","UNASSIGNED"]].tolist()
     for idx, hap in enumerate(haps):
         if not str(values[idx]) == "nan":
-            avail_pafs.append (f"results/{wildcards.sample}/saffire/outputs/trimmed_pafs/{wildcards.ref}/{hap}.{wildcards.aligner}.trimmed.paf")
+            avail_pafs.append (f"results/{wildcards.sample}/saffire/outputs/trimmed_pafs/{wildcards.ref}/{hap}.minimap2.trimmed.paf")
     return avail_pafs
 
 
@@ -74,9 +72,9 @@ rule make_minimap_paf:
 
 rule trim_paf:
     input:
-        paf = "results/{sample}/saffire/work/alignments/{ref}/pafs/{hap}.{aligner}.paf",
+        paf = "results/{sample}/saffire/work/alignments/{ref}/pafs/{hap}.minimap2.paf",
     output:
-        paf = "results/{sample}/saffire/outputs/trimmed_pafs/{ref}/{hap}.{aligner}.trimmed.paf",
+        paf = "results/{sample}/saffire/outputs/trimmed_pafs/{ref}/{hap}.minimap2.trimmed.paf",
     wildcard_constraints:
         ref='[A-Za-z0-9_-]+',
     threads: 12
@@ -115,7 +113,7 @@ rule make_bed:
         paf = rules.trim_paf.output.paf,
         genome_index = "resources/reference/{ref}/genome_index.txt"
     output:
-        bed = "results/{sample}/saffire/work/alignments/{ref}/beds/{hap}.{aligner}.bed",
+        bed = "results/{sample}/saffire/work/alignments/{ref}/beds/{hap}.minimap2.bed",
     wildcard_constraints:
         ref='[A-Za-z0-9_-]+',              
     threads: 1
@@ -130,10 +128,10 @@ rule make_bed:
 
 rule split_paf:
     input:
-        paf = "results/{sample}/saffire/work/alignments/{ref}/pafs/{hap}.{aligner}.paf",
+        paf = "results/{sample}/saffire/work/alignments/{ref}/pafs/{hap}.minimap2.paf",
     output:
-        flag = temp(scatter.split("results/{{sample}}/saffire/work/split_paf/{{ref}}/tmp/{{hap}}.{{aligner}}.{scatteritem}.paf")),
-        temp_paf = temp("results/{sample}/saffire/work/split_paf/{ref}/tmp/{hap}_uniform.{aligner}.paf")
+        flag = temp(scatter.split("results/{{sample}}/saffire/work/split_paf/{{ref}}/tmp/{{hap}}.minimap2.{scatteritem}.paf")),
+        temp_paf = temp("results/{sample}/saffire/work/split_paf/{ref}/tmp/{hap}_uniform.minimap2.paf")
     wildcard_constraints:
         ref='[A-Za-z0-9_-]+',             
     threads: 1
@@ -162,15 +160,15 @@ rule split_paf:
         col_out = df.columns.values
         for i, contig in enumerate(df[0].unique()):
             out_num = (i % PARTS) + 1
-            out_paf = f'results/{wildcards.sample}/saffire/work/split_paf/{wildcards.ref}/tmp/{wildcards.hap}.{wildcards.aligner}.{out_num}-of-{PARTS}.paf'
+            out_paf = f'results/{wildcards.sample}/saffire/work/split_paf/{wildcards.ref}/tmp/{wildcards.hap}.minimap2.{out_num}-of-{PARTS}.paf'
             df.loc[df[0] == contig][col_out].to_csv(out_paf, sep='\t', index=False, header=False, mode='a+')
 
 rule trim_break_orient_paf:
     input:
-        paf = "results/{sample}/saffire/work/split_paf/{ref}/tmp/{hap}.{aligner}.{scatteritem}.paf"
+        paf = "results/{sample}/saffire/work/split_paf/{ref}/tmp/{hap}.minimap2.{scatteritem}.paf"
     output:
-        contig = temp("results/{sample}/saffire/work/split_paf/{ref}/tmp/{hap}.{aligner}.{scatteritem}.orient.paf"),
-        broken = temp("results/{sample}/saffire/work/split_paf/{ref}/tmp/{hap}.{aligner}.{scatteritem}.broken.paf")
+        contig = temp("results/{sample}/saffire/work/split_paf/{ref}/tmp/{hap}.minimap2.{scatteritem}.orient.paf"),
+        broken = temp("results/{sample}/saffire/work/split_paf/{ref}/tmp/{hap}.minimap2.{scatteritem}.broken.paf")
     wildcard_constraints:
         ref='[A-Za-z0-9_-]+',             
     threads: 1
@@ -190,8 +188,8 @@ rule concat_pafs:
     input:
         paf = find_all_trimmed_paf
     output:
-        paf = "results/{sample}/saffire/outputs/merged_paf/{ref}/{aligner}.concat.paf",
-        flag = "results/{sample}/saffire/work/merged_paf/flags/{ref}.{aligner}.done"
+        paf = "results/{sample}/saffire/outputs/merged_paf/{ref}/minimap2.concat.paf",
+        flag = "results/{sample}/saffire/work/merged_paf/flags/{ref}.minimap2.done"
     wildcard_constraints:
         ref='[A-Za-z0-9_-]+',             
     threads:1 
@@ -208,8 +206,8 @@ rule combine_paf:
         paf = find_contigs,
         flag = rules.split_paf.output.flag
     output:
-        paf = "results/{sample}/saffire/work/combine_paf/{ref}/tmp/{hap}.{aligner}.broken.paf",
-        flag = "results/{sample}/saffire/work/combine_paf/flags/{ref}.{hap}.{aligner}.done"
+        paf = "results/{sample}/saffire/work/combine_paf/{ref}/tmp/{hap}.minimap2.broken.paf",
+        flag = "results/{sample}/saffire/work/combine_paf/flags/{ref}.{hap}.minimap2.done"
     wildcard_constraints:
         ref='[A-Za-z0-9_-]+',             
     threads: 1
@@ -225,8 +223,8 @@ rule saff_out:
     input:
         paf = rules.combine_paf.output.paf
     output:
-        saf = "results/{sample}/saffire/outputs/safs/{ref}/{hap}.{aligner}.saf",
-        flag = "results/{sample}/saffire/work/make_saf/flags/{ref}.{hap}.{aligner}.done"
+        saf = "results/{sample}/saffire/outputs/safs/{ref}/{hap}.minimap2.saf",
+        flag = "results/{sample}/saffire/work/make_saf/flags/{ref}.{hap}.minimap2.done"
     wildcard_constraints:
         ref='[A-Za-z0-9_-]+',             
     threads: 1
@@ -244,10 +242,10 @@ rule check_covered_chromosomes:
     input:
         paf = rules.trim_paf.output.paf
     output:
-        tsv = "results/{sample}/saffire/outputs/chrom_cov/{ref}/{hap}.{aligner}.chrom_cov.tsv",
-        flag = "results/{sample}/saffire/work/chrom_cov/flags/{ref}.{hap}.{aligner}.done"
+        tsv = "results/{sample}/saffire/outputs/chrom_cov/{ref}/{hap}.minimap2.chrom_cov.tsv",
+        flag = "results/{sample}/saffire/work/chrom_cov/flags/{ref}.{hap}.minimap2.done"
     wildcard_constraints:
-        ref='[A-Za-z0-9_-]+',             
+        ref='[A-Za-z0-9_-]+',
     threads: 1
     resources:
         mem = 8,

@@ -517,7 +517,7 @@ reportOverlapBases <- function(ranges=NULL, query.ranges=NULL, index=NULL) {
 #' along with genome-wide visualisation.
 #'
 #' @param h1.paf Alignments reported in PAF file format for haplotype 1.
-#' @param h2.paf Alignments reported in PAF file format for haplotype 1.
+#' @param h2.paf Alignments reported in PAF file format for haplotype 2.
 #' @inheritParams paf2ranges
 #' @return A  \code{\link{GRanges-class}} object.
 #' @author David Porubsky
@@ -533,13 +533,27 @@ asm2referenceCoverage <- function(h1.paf = NULL, h2.paf = NULL, min.mapq = 0, mi
                       , report.ctg.ends = FALSE)
   
   ## Read in alignments to the reference in PAF format for haplotype2
-  h2.gr <- paf2ranges(paf.file = h2.paf
-                      , index = 'H2'
-                      , min.mapq = min.mapq
-                      , min.aln.width = min.aln.width
-                      , min.ctg.size = min.ctg.size
-                      , report.ctg.ends = FALSE)
-  gr <- suppressWarnings( c(h1.gr$ctg.aln, h2.gr$ctg.aln) )
+  use_h2 <- !is.null(h2.paf) &&
+            is.character(h2.paf) &&
+            length(h2.paf) == 1 &&
+            nzchar(h2.paf) &&
+            file.exists(h2.paf)
+
+  if (use_h2) {
+    ## Read in alignments to the reference in PAF format for haplotype2
+    h2.gr <- paf2ranges(
+      paf.file      = h2.paf,
+      index         = "H2",
+      min.mapq      = min.mapq,
+      min.aln.width = min.aln.width,
+      min.ctg.size  = min.ctg.size,
+      report.ctg.ends = FALSE
+    )
+    gr <- suppressWarnings(c(h1.gr$ctg.aln, h2.gr$ctg.aln))
+  } else {
+    ## use only hap1 when there is no hap2.
+    gr <- h1.gr$ctg.aln
+  }
   ## Calculate coverage
   gr.cov <- as( coverage(gr), 'GRanges')
   cov.hap <- sum(width(gr.cov[gr.cov$score == 1]))
