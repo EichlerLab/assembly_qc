@@ -33,7 +33,7 @@ def find_all_trimmed_paf(wildcards):
     return avail_pafs
 
 
-checkpoint copy_ref_fasta:
+rule copy_ref_fasta:
     input:
         raw_ref=find_ref_fa,
     output:
@@ -162,6 +162,10 @@ rule split_paf:
             out_num = (i % PARTS) + 1
             out_paf = f'results/{wildcards.sample}/saffire/work/split_paf/{wildcards.ref}/tmp/{wildcards.hap}.minimap2.{out_num}-of-{PARTS}.paf'
             df.loc[df[0] == contig][col_out].to_csv(out_paf, sep='\t', index=False, header=False, mode='a+')
+        for check_num in range(1,PARTS+1):
+            check_out = f'results/{wildcards.sample}/saffire/work/split_paf/{wildcards.ref}/tmp/{wildcards.hap}.minimap2.{check_num}-of-{PARTS}.paf'
+            if (not os.path.exists(check_out)):
+                open(check_out,"w").close()
 
 rule trim_break_orient_paf:
     input:
@@ -180,8 +184,13 @@ rule trim_break_orient_paf:
         mem = 24,
         hrs = 24
     shell: """
-        rustybam orient {input.paf} | rustybam trim-paf | rb filter --paired-len 1000000 > {output.contig}
-        rustybam break-paf --max-size {params.sv_size} {output.contig} > {output.broken}
+        if [[ ! -s {input}.paf ]];then
+            : > {output.contig}
+            : > {output.broken}
+        else
+            rustybam orient {input.paf} | rustybam trim-paf | rb filter --paired-len 1000000 > {output.contig}
+            rustybam break-paf --max-size {params.sv_size} {output.contig} > {output.broken}
+        fi
         """
 
 rule concat_pafs:

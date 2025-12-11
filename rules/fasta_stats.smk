@@ -301,7 +301,7 @@ rule summary_hap_stats:
 
         busco_df = pd.read_csv(input.busco_result, sep="\t").set_index(["ASSEMBLY","HAPLOTYPE"])
         busco_df["percent_single_copy"] = (busco_df["S"]/busco_df["N"]*100).round(4)
-        busco_df["percent_multi_copy"] = (busco_df["M"]/busco_df["N"]*100).round(4)
+        busco_df["percent_multi_copy"] = (busco_df["D"]/busco_df["N"]*100).round(4)
         busco_df["percent_fragmented_copy"] = (busco_df["F"]/busco_df["N"]*100).round(4)
         busco_df["percent_missing_copy"] = (busco_df["M"]/busco_df["N"]*100).round(4)
         
@@ -328,7 +328,7 @@ rule summary_hap_stats:
         )
         selected_columns = ["chrX_ratio","chrY_ratio","quality_value",\
         "number_of_contigs", "number_of_scaffolds","gaps_between_scaffolds",\
-        "number_of_near_T2T_contigs", "number_of_near_T2T_scaffolds", "contig_l50","scaffold_l50", "total_ungapped_length", "largest_contig_size","gc_content",\
+        "number_of_near_T2T_contigs", "number_of_near_T2T_scaffolds", "contig_l50","contig_n50","scaffold_l50", "scaffold_n50","total_ungapped_length", "largest_contig_size","gc_content",\
         "percent_single_copy","percent_multi_copy","percent_fragmented_copy","percent_missing_copy"
         ]
         df = df[selected_columns]
