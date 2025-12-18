@@ -67,6 +67,14 @@ def get_saffire_final_outputs(wildcards):
         for idx, row in sample_sub.iterrows()
         for ref in REF_DICT
     ]
+    chain_files = [
+        f"results/{sample}/chain_files/outputs/{sample}_{row.HAP}_To_{ref}.chain"
+        for idx, row in sample_sub.iterrows()
+        for ref in REF_DICT
+    ]
+    if int(TAXID) == 9606:
+        final_outputs += chain_files
+
     return final_outputs
 
 
@@ -94,6 +102,10 @@ def get_moddotplot_outputs(wildcards):
         ]
     return final_outputs
 
+def get_nucfreq_config(wildcards):
+    sample = wildcards.sample
+    return f"results/{sample}/assembly_eval_config/output/config_file/{sample}.config.yaml"
+
 def get_plots_outputs(wildcards):
     sample = wildcards.sample
     sample_sub = groups[groups["SAMPLE"] == sample]
@@ -104,13 +116,15 @@ def get_plots_outputs(wildcards):
         f"results/{sample}/plots/outputs/ideo/{ref}/pdf/{sample}.minimap2.ideoplot.pdf"
         for idx, row in sample_sub.iterrows()
         for ref in REF_DICT
+    ] + [
+        f"results/{sample}/plots/outputs/ideo/{ref}/pdf/{sample}.minimap2.ideoplot_wide.pdf"
+        for idx, row in sample_sub.iterrows()
+        for ref in REF_DICT
+    ] + [
+        f"results/{sample}/plots/outputs/ploidy/CHM13/pdf/{sample}.minimap2.ploidy.pdf"
+        for idx, row in sample_sub.iterrows()
     ]
-    if int(TAXID) == 9606:
-        final_outputs += [
-            f"results/{sample}/plots/outputs/ploidy/{ref}/pdf/{sample}.minimap2.ploidy.pdf"
-            for idx, row in sample_sub.iterrows()
-            for ref in REF_DICT
-        ]
+    #"results/{sample}/plots/outputs/ploidy/{ref}/pdf/{sample}.minimap2.ploidy.pdf"
     return final_outputs
 ## ==================
 
@@ -123,14 +137,18 @@ full_manifest_df = pd.read_csv(
 
 conv_manifest_df = get_asm_manifest_df(full_manifest_df)
 sample_list = sorted(full_manifest_df["SAMPLE"].astype(str).unique())
+
+mask = full_manifest_df["H1"].notna() & (
+    full_manifest_df["H1"].astype(str).str.split() != ""
+)
+
+samples_with_asm = full_manifest_df.loc[mask, "SAMPLE"].astype(str).tolist()
+
 full_manifest_df.set_index("SAMPLE", inplace=True)
-samples_with_asm = [
-    s for s in full_manifest_df.index
-    if pd.notna(full_manifest_df.at[s, "H1"]) and str(full_manifest_df.at[s, "H1"]).strip()
-]
 
 groups = conv_manifest_df[["SAMPLE","HAP"]].drop_duplicates().copy()
 conv_manifest_df.set_index(["SAMPLE","HAP"], inplace=True)
+conv_manifest_df.sort_index(inplace=True)
 
 
 wildcard_constraints:
@@ -154,7 +172,8 @@ rule gather_outputs_per_sample:
         get_compleasm_final_outputs,
         get_fasta_stats_outputs,
         get_moddotplot_outputs,
-        get_plots_outputs
+        get_plots_outputs,
+        get_nucfreq_config,
     output:
         flag = touch("results/{sample}/complete_flag/all_done")
 
