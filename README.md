@@ -46,12 +46,12 @@ unique_sample_name    unique_sample_name/assembly.haplotype1.fasta   unique_samp
 ## Anlaysis
 Begin with a dry-run
 ```commandline
-./runlocal 30 -np
+./runcluster 30 -np
 ```
 
 If dry-run looks good, proceed with:
 ```commandline
-./runlocal 30 
+./runcluster 30 
 ```
 
 ## Major Analysis Output

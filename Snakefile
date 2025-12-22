@@ -16,9 +16,7 @@ TAXID = config.get("TAXID", "9606")
 INCLUDE_MITO = bool(config.get("INCLUDE_MITO", False))
 REF_DICT = config["REF"]
 
-
-
-## functions =========
+## manifest ==================
 
 def get_asm_manifest_df(manifest_df):
     add_haps = {"H2": "hap2", "UNASSIGNED": "un"}
@@ -30,90 +28,6 @@ def get_asm_manifest_df(manifest_df):
             if col in manifest_df.columns and pd.notna(row[col]) and str(row[col]).strip():
                 rows.append({"SAMPLE": row["SAMPLE"], "HAP": add_haps[col], "FASTA": row[col]})
     return pd.DataFrame(rows)
-
-
-def get_fcs_final_outputs(wildcards):
-    sample = wildcards.sample
-    sample_sub = groups[groups["SAMPLE"] == sample]
-    outputs = [
-        f"results/{sample}/contamination_screening/outputs/final_fasta/{sample}_{row.HAP}.fasta"
-        for idx, row in sample_sub.iterrows()
-    ]
-    if INCLUDE_MITO and (int(TAXID) == 9696):
-        outputs += [
-            f"results/{sample}/contamination_screening/outputs/mito_fasta/{row.HAP}-mt.fasta"
-            for idx, row in sample_sub.iterrows()
-        ]
-    return outputs
-
-def get_merqury_final_outputs(wildcards):
-    sample = wildcards.sample
-    trio_result = find_trios(wildcards)
-    if len(trio_result) > 0:
-        return [f"results/{sample}/merqury/outputs/{sample}.qv"]+trio_result
-    else:
-        return f"results/{sample}/merqury/outputs/{sample}.qv"
-
-
-def get_saffire_final_outputs(wildcards):
-    sample = wildcards.sample
-    sample_sub = groups[groups["SAMPLE"] == sample]
-    final_outputs = [
-        f"results/{sample}/saffire/outputs/safs/{ref}/{row.HAP}.minimap2.saf"
-        for idx, row in sample_sub.iterrows()
-        for ref in REF_DICT
-    ] + [
-        f"results/{sample}/saffire/outputs/chrom_cov/{ref}/{row.HAP}.minimap2.chrom_cov.tsv"
-        for idx, row in sample_sub.iterrows()
-        for ref in REF_DICT
-    ]
-    return final_outputs
-
-
-def get_compleasm_final_outputs(wildcards):
-    sample = wildcards.sample
-    return f"results/{sample}/compleasm/outputs/summary/{sample}.summary.tsv"
-
-
-def get_fasta_stats_outputs(wildcards):
-    sample = wildcards.sample
-    return f"results/{sample}/stats/outputs/summary/{sample}.summary.stats"
-
-def get_moddotplot_outputs(wildcards):
-    if not int(TAXID) == 9606:
-        final_outputs = []
-    else:
-        sample = wildcards.sample
-        sample_sub = groups[groups["SAMPLE"] == sample]
-        final_outputs = [
-            f"results/{sample}/moddotplot/outputs/summary/{row.HAP}.generated_acros.tsv"
-            for idx, row in sample_sub.iterrows()
-        ] + [
-            f"results/{sample}/moddotplot/outputs/contig_stats/{row.HAP}.CHM13_lifted_contigs.tsv"
-            for idx, row in sample_sub.iterrows()
-        ]
-    return final_outputs
-
-def get_plots_outputs(wildcards):
-    sample = wildcards.sample
-    sample_sub = groups[groups["SAMPLE"] == sample]
-    final_outputs = [
-        f"results/{sample}/plots/outputs/contig_length/{row.HAP}.scaffold.scatter_logged.png"
-        for idx, row in sample_sub.iterrows()
-    ] + [
-        f"results/{sample}/plots/outputs/ideo/{ref}/pdf/{sample}.minimap2.ideoplot.pdf"
-        for idx, row in sample_sub.iterrows()
-        for ref in REF_DICT
-    ]
-    if int(TAXID) == 9606:
-        final_outputs += [
-            f"results/{sample}/plots/outputs/ploidy/{ref}/pdf/{sample}.minimap2.ploidy.pdf"
-            for idx, row in sample_sub.iterrows()
-            for ref in REF_DICT
-        ]
-    return final_outputs
-## ==================
-
 
 full_manifest_df = pd.read_csv(
     MANIFEST, header=0, sep="\t", comment="#",
@@ -137,7 +51,107 @@ wildcard_constraints:
     sample = "|".join(sample_list),
     hap = "|".join(["hap1","hap2","un"]),
 
+
+## rule functions =========
+
+def get_sample_fcs_final_outputs(wildcards):
+    sample = wildcards.sample
+    sample_sub = groups[groups["SAMPLE"] == sample]
+    outputs = [
+        f"results/{sample}/contamination_screening/outputs/final_fasta/{sample}_{row.HAP}.fasta"
+        for idx, row in sample_sub.iterrows()
+    ]
+    if INCLUDE_MITO and (int(TAXID) == 9696):
+        outputs += [
+            f"results/{sample}/contamination_screening/outputs/mito_fasta/{row.HAP}-mt.fasta"
+            for idx, row in sample_sub.iterrows()
+        ]
+    return outputs
+
+def get_sample_merqury_final_outputs(wildcards):
+    sample = wildcards.sample
+    trio_result = find_trios(wildcards)
+    if len(trio_result) > 0:
+        return [f"results/{sample}/merqury/outputs/{sample}.qv"]+trio_result
+    else:
+        return [f"results/{sample}/merqury/outputs/{sample}.qv"]
+
+
+def get_sample_saffire_final_outputs(wildcards):
+    sample = wildcards.sample
+    sample_sub = groups[groups["SAMPLE"] == sample]
+    final_outputs = [
+        f"results/{sample}/saffire/outputs/safs/{ref}/{row.HAP}.minimap2.saf"
+        for idx, row in sample_sub.iterrows()
+        for ref in REF_DICT
+    ] + [
+        f"results/{sample}/saffire/outputs/chrom_cov/{ref}/{row.HAP}.minimap2.chrom_cov.tsv"
+        for idx, row in sample_sub.iterrows()
+        for ref in REF_DICT
+    ]
+    return final_outputs
+
+def get_sample_compleasm_final_outputs(wildcards):
+    sample = wildcards.sample
+    return f"results/{sample}/compleasm/outputs/summary/{sample}.summary.tsv"
+
+
+def get_sample_fasta_stats_outputs(wildcards):
+    sample = wildcards.sample
+    return f"results/{sample}/stats/outputs/summary/{sample}.summary.stats"
+
+def get_sample_moddotplot_outputs(wildcards):
+    if not int(TAXID) == 9606:
+        final_outputs = []
+    else:
+        sample = wildcards.sample
+        sample_sub = groups[groups["SAMPLE"] == sample]
+        final_outputs = [
+            f"results/{sample}/moddotplot/outputs/summary/{row.HAP}.generated_acros.tsv"
+            for idx, row in sample_sub.iterrows()
+        ] + [
+            f"results/{sample}/moddotplot/outputs/contig_stats/{row.HAP}.CHM13_lifted_contigs.tsv"
+            for idx, row in sample_sub.iterrows()
+        ]
+    return final_outputs
+
+def get_sample_plots_outputs(wildcards):
+    sample = wildcards.sample
+    sample_sub = groups[groups["SAMPLE"] == sample]
+    final_outputs = [
+        f"results/{sample}/plots/outputs/contig_length/{row.HAP}.scaffold.scatter_logged.png"
+        for idx, row in sample_sub.iterrows()
+    ] + [
+        f"results/{sample}/plots/outputs/ideo/{ref}/pdf/{sample}.minimap2.ideoplot.pdf"
+        for idx, row in sample_sub.iterrows()
+        for ref in REF_DICT
+    ]
+    if int(TAXID) == 9606:
+        final_outputs += [
+            f"results/{sample}/plots/outputs/ploidy/{ref}/pdf/{sample}.minimap2.ploidy.pdf"
+            for idx, row in sample_sub.iterrows()
+            for ref in REF_DICT
+        ]
+    return final_outputs
+
+def get_all_outputs(which_one):
+    outputs = []
+    for sample in samples_with_asm:
+        wildcards = type("WC", (), {"sample": sample})()
+        if which_one == "cleaned_fasta":
+            outputs.extend(get_sample_fcs_final_outputs(wildcards))
+        elif which_one == "saf":
+            outputs.extend(get_sample_saffire_final_outputs(wildcards))
+        elif which_one == "plots":
+            outputs.extend(get_sample_plots_outputs(wildcards))
+        elif which_one == "moddot_plots":
+            outputs.extend(get_sample_moddotplot_outputs(wildcards))
+        elif which_one == "qv":
+            outputs.extend(get_sample_merqury_final_outputs(wildcards))
+    return outputs
+
 localrules: all, gather_outputs_per_sample
+
 
 rule all:
     input:
@@ -145,16 +159,47 @@ rule all:
             sample=samples_with_asm
         )
 
+rule get_cleaned_fasta_only:
+    input:
+        lambda wildcards: get_all_outputs(which_one = "cleaned_fasta")
+
+rule get_qv_only:
+    input:
+        lambda wildcards: get_all_outputs(which_one = "qv")
+
+rule get_saf_only:
+    input:
+        lambda wildcards: get_all_outputs(which_one = "saf")
+
+rule get_plots_only:
+    input:
+        lambda wildcards: get_all_outputs(which_one = "plots")
+
+rule get_moddotplots_only:
+    input:
+        lambda wildcards: get_all_outputs(which_one = "moddot_plots")
+
+rule get_stats_only:
+    input:
+        expand("results/{sample}/stats/outputs/summary/{sample}.summary.stats",
+            sample=samples_with_asm
+        )
+rule get_busco_only:
+    input:
+        expand("results/{sample}/compleasm/outputs/summary/{sample}.summary.tsv",
+            sample=samples_with_asm
+        )
+
 
 rule gather_outputs_per_sample:
     input:
-        get_fcs_final_outputs,
-        get_merqury_final_outputs,
-        get_saffire_final_outputs,
-        get_compleasm_final_outputs,
-        get_fasta_stats_outputs,
-        get_moddotplot_outputs,
-        get_plots_outputs
+        get_sample_fcs_final_outputs,
+        get_sample_merqury_final_outputs,
+        get_sample_saffire_final_outputs,
+        get_sample_compleasm_final_outputs,
+        get_sample_fasta_stats_outputs,
+        get_sample_moddotplot_outputs,
+        get_sample_plots_outputs
     output:
         flag = touch("results/{sample}/complete_flag/all_done")
 
