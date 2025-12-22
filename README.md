@@ -25,9 +25,6 @@ REF:
     CHROMS: /net/eichler/vol28/eee_shared/assemblies/hg38/no_alt/genome.txt
     CYTO: /net/eichler/vol28/eee_shared/assemblies/hg38/no_alt/anno/cyto.bed ## Optional
 
-### ModDotPlot
-BED: config/moddot_regions.bed
-
 ### compleasm
 DB_PATH: /net/eichler/vol28/eee_shared/buscodb/
 LINEAGE: primates
@@ -35,23 +32,24 @@ MODE: busco
 
 ### foreign contamination screening
 TAXID: 9606
+INCLUDE_MITO: true
 ```
 
 Example Manifest ( tab-delemetered )
 ```commandline
 SAMPLE    H1    H2    UNASSIGNED      ILLUMINA      FOFN    TRIO    MO_ID   FA_ID
-unique_sample_name    unique_sample_name/assembly.haplotype1.fasta   unique_sample_name/assembly.haplotype2.fasta    NA    sample_name    sample_name_illumina.fofn   NO      NA      NA
+SAMPLE  test_data/asm/verkko.hap1.fasta test_data/asm/verkko.hap2.fasta test_data/asm/verkko.unassigned.fasta SAMPLE  test_data/fofn/reads.fofn NO  NA  NA
 ```
 
 ## Anlaysis
 Begin with a dry-run
 ```commandline
-./runlocal 30 -np
+./runcluster 30 -np
 ```
 
 If dry-run looks good, proceed with:
 ```commandline
-./runlocal 30 
+./runcluster 30 
 ```
 
 ## Major Analysis Output
@@ -59,179 +57,190 @@ If dry-run looks good, proceed with:
 
 ```commandline
 .
-├── assembly_stats
-│   └── unique_sample_name
-│       └── unique_sample_name.tsv
-├── compleasm
-│   └── results
-│       ├── unique_sample_name_hap1
-│       │   ├── {database}
-│       │   └── summary.txt
-│       └── unique_sample_name_hap2
-│           ├── {database}
-│           └── summary.txt
-├── contamination_screening
-│   ├── filtered_fasta
-│   │   ├── unique_sample_name_hap1.filtered.fasta
-│   │   ├── unique_sample_name_hap2.filtered.fasta
-│   ├── raw_fasta
-│   │   ├── unique_sample_name_hap1.fasta (link to the input hap1 fasta)
-│   │   └── unique_sample_name_hap2.fasta (link to the input hap2 fasta)
-│   └── results
-│       ├── unique_sample_name_hap1
-│       └── unique_sample_name_hap2
-├── fcs_cleaned_fasta
-│   ├── unique_sample_name_hap1
-│   │   ├── unique_sample_name_hap1.fasta
-│   │   └── contig_fasta
-│   │       └── unique_sample_name_hap1.fasta
-│   └── unique_sample_name_hap2
-│       ├── unique_sample_name_hap2.fasta
-│       └── contig_fasta
-│           └── unique_sample_name_hap2.fasta
-├── merqury
-│   ├── meryl
-│   │   ├── sample_name
-│   │   │   └── sample_name_all.meryl
-│   └── results
-│       └── unique_sample_name
-│           ├── unique_sample_name.unique_sample_name_hap1.qv
-│           ├── unique_sample_name.unique_sample_name_hap2.qv
-│           ├── unique_sample_name.completeness.stats
-│           ├── unique_sample_name.qv
-│           ├── unique_sample_name_hap1.meryl
-│           └── unique_sample_name_hap2.meryl
-├── moddotplot (only for human ; TAXID 9606)
-│   ├── contigs
-│   │   ├── unique_sample_name_hap1
-│   │   └── unique_sample_name_hap2
-│   ├── fasta
-│   │   ├── unique_sample_name_hap1
-│   │   └── unique_sample_name_hap2
-│   ├── liftover
-│   │   └── paf
-│   │       ├── unique_sample_name_hap1
-│   │       └── unique_sample_name_hap2
-│   ├── results
-│   │   ├── unique_sample_name_hap1.generated_acros.tsv
-│   │   ├── unique_sample_name_hap2.generated_acros.tsv
-│   │   ├── unique_sample_name_hap1 (some can be missing)
-│   │   │   ├── CHROM_1_22508596_FULL.pdf
-│   │   │   ├── chr13_1_22508596_FULL.png
-│   │   │   ├── chr13_1_22508596_TRI.pdf
-│   │   │   ├── chr13_1_22508596_TRI.png
-│   │   │   ├── chr14_1_17708411_FULL.pdf
-│   │   │   ├── chr14_1_17708411_FULL.png
-│   │   │   ├── chr14_1_17708411_TRI.pdf
-│   │   │   ├── chr14_1_17708411_TRI.png
-│   │   │   ├── chr15_1_22694466_FULL.pdf
-│   │   │   ├── chr15_1_22694466_FULL.png
-│   │   │   ├── chr15_1_22694466_TRI.pdf
-│   │   │   ├── chr15_1_22694466_TRI.png
-│   │   │   ├── chr21_1_16306378_FULL.pdf
-│   │   │   ├── chr21_1_16306378_FULL.png
-│   │   │   ├── chr21_1_16306378_TRI.pdf
-│   │   │   ├── chr21_1_16306378_TRI.png
-│   │   │   ├── chr22_1_20711065_FULL.pdf
-│   │   │   ├── chr22_1_20711065_FULL.png
-│   │   │   ├── chr22_1_20711065_TRI.pdf
-│   │   │   └── chr22_1_20711065_TRI.png
-│   │   └── unique_sample_name_hap2 (some can be missing)
-│   │       ├── chr13_1_22508596_FULL.pdf
-│   │       ├── chr13_1_22508596_FULL.png
-│   │       ├── chr13_1_22508596_TRI.pdf
-│   │       ├── chr13_1_22508596_TRI.png
-│   │       ├── chr14_1_17708411_FULL.pdf
-│   │       ├── chr14_1_17708411_FULL.png
-│   │       ├── chr14_1_17708411_TRI.pdf
-│   │       ├── chr14_1_17708411_TRI.png
-│   │       ├── chr15_1_22694466_FULL.pdf
-│   │       ├── chr15_1_22694466_FULL.png
-│   │       ├── chr15_1_22694466_TRI.pdf
-│   │       ├── chr15_1_22694466_TRI.png
-│   │       ├── chr21_1_16306378_FULL.pdf
-│   │       ├── chr21_1_16306378_FULL.png
-│   │       ├── chr21_1_16306378_TRI.pdf
-│   │       ├── chr21_1_16306378_TRI.png
-│   │       ├── chr22_1_20711065_FULL.pdf
-│   │       ├── chr22_1_20711065_FULL.png
-│   │       ├── chr22_1_20711065_TRI.pdf
-│   │       └── chr22_1_20711065_TRI.png
-│   └── target_beds
-│       ├── chr13_1_22508596.bed
-│       ├── chr14_1_17708411.bed
-│       ├── chr15_1_22694466.bed
-│       ├── chr21_1_16306378.bed
-│       └── chr22_1_20711065.bed
-├── plots
-│   ├── contigs
-│   │   ├── unique_sample_name_hap1.dist.log.png
-│   │   ├── unique_sample_name_hap1.scatter.log.png
-│   │   ├── unique_sample_name_hap2.dist.log.png
-│   │   └── unique_sample_name_hap2.scatter.log.png
-│   ├── ideo
-│   │   └── minimap2
-│   │       ├── unique_sample_name_to_CHM13.ideoplot.pdf
-│   │       └── unique_sample_name_to_HG38.ideoplot.pdf
-│   └── ploidy (only for CHM13)
-│       └── CHM13
-│           └── minimap2
-│               ├── unique_sample_name.ploidy.pdf
-│               └── unique_sample_name.summary.txt
-├── saffire
-│   ├── CHM13
-│   │   ├── reference
-│   │   │   ├── CHM13.fa
-│   │   │   ├── CHM13.fa.fai
-│   │   │   └── CHM13.genome.txt
-│   │   └── results
-│   │       ├── unique_sample_name_hap1
-│   │       │   ├── alignments
-│   │       │   │   └── unique_sample_name_hap1.minimap2.paf
-│   │       │   └── beds
-│   │       │       └── unique_sample_name_hap1.minimap2.bed
-│   │       └── unique_sample_name_hap2
-│   │           ├── alignments
-│   │           │   ├── unique_sample_name_hap2.minimap2.bam
-│   │           │   └── unique_sample_name_hap2.minimap2.paf
-│   │           └── beds
-│   │               └── unique_sample_name_hap2.minimap2.bed
-│   └── HG38
-│       ├── reference
-│       │   ├── HG38.fa
-│       │   ├── HG38.fa.fai
-│       │   └── HG38.genome.txt
-│       └── results
-│           ├── unique_sample_name_hap1
-│           │   ├── alignments
-│           │   │   └── unique_sample_name_hap1.minimap2.paf
-│           │   └── beds
-│           │       └── unique_sample_name_hap1.minimap2.bed
-│           └── unique_sample_name_hap2
-│               ├── alignments
-│               │   ├── unique_sample_name_hap2.minimap2.bam
-│               │   └── unique_sample_name_hap2.minimap2.paf
-│               └── beds
-│                   └── unique_sample_name_hap2.minimap2.bed
-└── stats
-    ├── seq_stats
-    │   ├── unique_sample_name_hap1.contig.stats
-    │   ├── unique_sample_name_hap1.scaftig.stats
-    │   ├── unique_sample_name_hap2.contig.stats
-    │   └── unique_sample_name_hap2.scaftig.stats
-    └── telo
-        ├── unique_sample_name_hap1.contig.telo.tbl
-        ├── unique_sample_name_hap1.scaftig.telo.tbl
-        ├── unique_sample_name_hap2.contig.telo.tbl
-        └── unique_sample_name_hap2.scaftig.telo.tbl
+├── resources
+│   ├── acro_target_beds
+│   │   └── *.bed
+│   ├── meryl
+│   │   └── SAMPLE
+│   │       └── SAMPLE_all.meryl
+│   └── reference
+│       └── {REF}
+│           ├── genome.fa
+│           ├── genome.fa.fai
+│           └── genome_index.txt
+└── results
+    └── SAMPLE
+        ├── assembly_eval_config
+        │   └── output
+        │       └── config_file
+        │           └── SAMPLE.config.yaml
+        ├── chain_files
+        │   ├── outputs
+        │   │   └── {REF}
+        │   │       ├── {hap}.query_to_target.chain
+        │   │       └── {hap}.query_to_target.invert.chain
+        │   └── work
+        │       └── filter_paf
+        ├── compleasm
+        │   ├── outputs
+        │   │   └── summary
+        │   │       └── SAMPLE.summary.tsv
+        │   └── work
+        │       └── summary
+        │           └── {hap}
+        │               ├── primates_odb10
+        │               └── summary.txt
+        ├── complete_flag
+        ├── contamination_screening
+        │   ├── outputs
+        │   │   ├── contig_fasta
+        │   │   │   └── SAMPLE_{hap}.fasta
+        │   │   ├── final_fasta
+        │   │   │   └── SAMPLE_{hap}.fasta
+        │   │   ├── mito_fasta
+        │   │   │   └── {hap}-mt.fasta
+        │   │   └── rdna_fasta
+        │   │       └── {hap}-rdna.fasta
+        │   └── work
+        │       ├── blast
+        │       │   ├── beds
+        │       │   └── outputs
+        │       ├── extract_mito
+        │       │   └── flags
+        │       ├── fastq_cleaning
+        │       │   ├── gx_adapt_cleaning
+        │       │   │   ├── beds
+        │       │   │   └── cleaned_fasta
+        │       │   ├── rdna_cleaning
+        │       │   │   └── beds
+        │       │   └── short_contig_flitering
+        │       │       └── cleaned_fasta
+        │       ├── fcs_adaptor
+        │       │   └── outputs
+        │       │       └── {hap}
+        │       │           ├── cleaned_sequences
+        │       │           │   └── {hap}.filtered.fasta
+        │       │           ├── *.log
+        │       │           ├── *.jsonl
+        │       │           ├── fcs_adaptor_report.txt
+        │       │           ├── pipeline_args.yaml
+        │       │           └── validate_fasta.txt
+        │       ├── fcs_gx
+        │       │   ├── flags
+        │       │   └── outputs
+        │       │       └── {hap}
+        │       │           ├── {hap}.filtered.9606.fcs_gx_report.txt
+        │       │           └── {hap}.filtered.9606.taxonomy.rpt
+        │       ├── hap2_{hap}_merge_for_nucfreq
+        │       │   └── flags
+        │       ├── rdna_cleaning
+        │       │   └── cleaned_fasta
+        │       └── temp
+        ├── merqury
+        │   ├── outputs
+        │   │   ├── logs
+        │   │   ├── SAMPLE.qv
+        │   │   ├── SAMPLE_{hap}.completeness.stats
+        │   │   ├── SAMPLE_{hap}.qv
+        │   └── work
+        │       └── SAMPLE_run{hap}.sh
+        ├── moddotplot
+        │   ├── outputs
+        │   │   ├── contig_stats
+        │   │   │   ├── {hap}.CHM13_lifted_contigs.tab
+        │   │   │   └── {hap}.CHM13_lifted_contigs.tsv
+        │   │   ├── plots
+        │   │   │   └── {hap}
+        │   │   │       ├── {acro_chr}_{position}_{contig_name}_FULL.pdf
+        │   │   │       └── {acro_chr}_{position}_{contig_name}_FULL.png
+        │   │   └── summary
+        │   │       └── {hap}.generated_acros.tsv
+        │   └── work
+        │       ├── find_tigs
+        │       │   ├── beds
+        │       │   ├── flags
+        │       │   └── pafs
+        │       ├── get_pq_tigs
+        │       │   ├── fasta
+        │       │   └── flags
+        │       ├── liftover
+        │       │   └── CHM13 *fixed
+        │       │       ├── pafs
+        │       │       ├── paf_stats
+        │       │       └── trimmed_pafs
+        │       └── selfplot
+        │           └── flags
+        ├── plots
+        │   └── outputs
+        │       ├── contig_length
+        │       │   └── {hap}.scaffold.scatter_logged.png
+        │       ├── ideo
+        │       │   └── {REF}
+        │       │       └── pdf
+        │       │           ├── SAMPLE.minimap2.ideoplot.pdf
+        │       │           └── SAMPLE.minimap2.ideoplot_wide.pdf
+        │       └── ploidy
+        │           └── CHM13 *fixed
+        │               ├── pdf
+        │               │   └── SAMPLE.minimap2.ploidy.pdf
+        │               └── summary
+        │                   └── SAMPLE.minimap2.ploidy_summary.txt
+        ├── saffire
+        │   ├── outputs
+        │   │   ├── chrom_cov
+        │   │   │   └── {REF}
+        │   │   │       └── {hap}.minimap2.chrom_cov.tsv
+        │   │   ├── safs
+        │   │   │   └── {REF}
+        │   │   │       └── {hap}.minimap2.saf
+        │   │   └── trimmed_pafs
+        │   │       └── {REF}
+        │   │           └── {hap}.minimap2.trimmed.paf
+        │   └── work
+        │       ├── alignments
+        │       │   └── {REF}
+        │       │       ├── beds
+        │       │       └── pafs
+        │       ├── chrom_cov
+        │       │   └── flags
+        │       ├── combine_paf
+        │       │   ├── flags
+        │       │   └── {REF}
+        │       └── make_saf
+        │           └── flags
+        └── stats
+            ├── outputs
+            │   ├── summary
+            │   │   └── SAMPLE.summary.stats
+            │   └── summary_by_hap
+            │       └── {hap}.summary.stats
+            └── work
+                ├── fasta_stats
+                │   ├── full_genome.contig.stats
+                │   ├── full_genome.stats
+                │   ├── {hap}.contig.stats
+                │   └── {hap}.scaffold.stats
+                ├── full_genome
+                │   ├── contig_fasta
+                │   │   └── SAMPLE.fasta
+                │   └── SAMPLE.fasta
+                └── telo
+                    ├── flags
+                    │   └── *.done
+                    ├── full_genome_contigs.telo.tbl
+                    ├── full_genome.telo.tbl
+                    ├── {hap}.contig.telo.tbl
+                    └── {hap}.scaffold.telo.tbl
 ```
 ## Partial Reulsts Options
- - get_saf : saffire results including asm to ref paf
- - get_compleasm : BUSCO results
- - get_cleaned_fasta : Cleaned fasta
- - get_stats : basic statistics such as N50
- - get_qv: QV score
- - get_plots : ploidy, projection, ModDot
+ - get_saf_only : saffire results including asm to ref paf
+ - get_busco_only : BUSCO results (compleasm)
+ - get_cleaned_fasta_only : Cleaned fasta
+ - get_stats_only : basic statistics such as N50
+ - get_qv_only: QV score
+ - get_plots_only : ploidy, projection, 
+ - get_moddotplots_only: ModDotPlot
+
 ```commandline
 ./runcluster 30 get_qv get_compleasm
 ```

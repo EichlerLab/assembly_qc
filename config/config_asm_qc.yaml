@@ -10,9 +10,6 @@ REF:
     CHROMS: /net/eichler/vol28/eee_shared/assemblies/hg38/no_alt/genome.txt
     CYTO: /net/eichler/vol28/eee_shared/assemblies/hg38/no_alt/anno/cyto.bed ## Optional
 
-### ModDotPlot
-BED: config/moddot_regions.bed
-
 ### compleasm
 DB_PATH: /net/eichler/vol28/eee_shared/buscodb/
 LINEAGE: primates

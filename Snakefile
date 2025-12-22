@@ -16,9 +16,7 @@ TAXID = config.get("TAXID", "9606")
 INCLUDE_MITO = bool(config.get("INCLUDE_MITO", False))
 REF_DICT = config["REF"]
 
-
-
-## functions =========
+## manifest ==================
 
 def get_asm_manifest_df(manifest_df):
     add_haps = {"H2": "hap2", "UNASSIGNED": "un"}
@@ -31,8 +29,32 @@ def get_asm_manifest_df(manifest_df):
                 rows.append({"SAMPLE": row["SAMPLE"], "HAP": add_haps[col], "FASTA": row[col]})
     return pd.DataFrame(rows)
 
+full_manifest_df = pd.read_csv(
+    MANIFEST, header=0, sep="\t", comment="#",
+    na_values=["", "NA", "na", "N/A"]
+)
 
-def get_fcs_final_outputs(wildcards):
+
+conv_manifest_df = get_asm_manifest_df(full_manifest_df)
+sample_list = sorted(full_manifest_df["SAMPLE"].astype(str).unique())
+full_manifest_df.set_index("SAMPLE", inplace=True)
+samples_with_asm = [
+    s for s in full_manifest_df.index
+    if pd.notna(full_manifest_df.at[s, "H1"]) and str(full_manifest_df.at[s, "H1"]).strip()
+]
+
+groups = conv_manifest_df[["SAMPLE","HAP"]].drop_duplicates().copy()
+conv_manifest_df.set_index(["SAMPLE","HAP"], inplace=True)
+
+
+wildcard_constraints:
+    sample = "|".join(sample_list),
+    hap = "|".join(["hap1","hap2","un"]),
+
+
+## rule functions =========
+
+def get_sample_fcs_final_outputs(wildcards):
     sample = wildcards.sample
     sample_sub = groups[groups["SAMPLE"] == sample]
     outputs = [
@@ -46,16 +68,16 @@ def get_fcs_final_outputs(wildcards):
         ]
     return outputs
 
-def get_merqury_final_outputs(wildcards):
+def get_sample_merqury_final_outputs(wildcards):
     sample = wildcards.sample
     trio_result = find_trios(wildcards)
     if len(trio_result) > 0:
         return [f"results/{sample}/merqury/outputs/{sample}.qv"]+trio_result
     else:
-        return f"results/{sample}/merqury/outputs/{sample}.qv"
+        return [f"results/{sample}/merqury/outputs/{sample}.qv"]
 
 
-def get_saffire_final_outputs(wildcards):
+def get_sample_saffire_final_outputs(wildcards):
     sample = wildcards.sample
     sample_sub = groups[groups["SAMPLE"] == sample]
     final_outputs = [
@@ -77,13 +99,12 @@ def get_saffire_final_outputs(wildcards):
 
     return final_outputs
 
-
-def get_compleasm_final_outputs(wildcards):
+def get_sample_compleasm_final_outputs(wildcards):
     sample = wildcards.sample
     return f"results/{sample}/compleasm/outputs/summary/{sample}.summary.tsv"
 
 
-def get_fasta_stats_outputs(wildcards):
+def get_sample_fasta_stats_outputs(wildcards):
     sample = wildcards.sample
     sample_sub = groups[groups["SAMPLE"] == sample]
     final_outputs = [
@@ -94,7 +115,7 @@ def get_fasta_stats_outputs(wildcards):
     ]
     return final_outputs
 
-def get_moddotplot_outputs(wildcards):
+def get_sample_moddotplot_outputs(wildcards):
     if not int(TAXID) == 9606:
         final_outputs = []
     else:
@@ -109,11 +130,7 @@ def get_moddotplot_outputs(wildcards):
         ]
     return final_outputs
 
-def get_nucfreq_config(wildcards):
-    sample = wildcards.sample
-    return f"results/{sample}/assembly_eval_config/output/config_file/{sample}.config.yaml"
-
-def get_plots_outputs(wildcards):
+def get_sample_plots_outputs(wildcards):
     sample = wildcards.sample
     sample_sub = groups[groups["SAMPLE"] == sample]
     final_outputs = [
@@ -133,36 +150,26 @@ def get_plots_outputs(wildcards):
     ]
     #"results/{sample}/plots/outputs/ploidy/{ref}/pdf/{sample}.minimap2.ploidy.pdf"
     return final_outputs
-## ==================
 
-
-full_manifest_df = pd.read_csv(
-    MANIFEST, header=0, sep="\t", comment="#",
-    na_values=["", "NA", "na", "N/A"]
-)
-
-
-conv_manifest_df = get_asm_manifest_df(full_manifest_df)
-sample_list = sorted(full_manifest_df["SAMPLE"].astype(str).unique())
-
-mask = full_manifest_df["H1"].notna() & (
-    full_manifest_df["H1"].astype(str).str.split() != ""
-)
-
-samples_with_asm = full_manifest_df.loc[mask, "SAMPLE"].astype(str).tolist()
-
-full_manifest_df.set_index("SAMPLE", inplace=True)
-
-groups = conv_manifest_df[["SAMPLE","HAP"]].drop_duplicates().copy()
-conv_manifest_df.set_index(["SAMPLE","HAP"], inplace=True)
-conv_manifest_df.sort_index(inplace=True)
-
-
-wildcard_constraints:
-    sample = "|".join(sample_list),
-    hap = "|".join(["hap1","hap2","un"]),
+def get_all_outputs(which_one):
+    outputs = []
+    for sample in samples_with_asm:
+        wildcards = type("WC", (), {"sample": sample})()
+        if which_one == "cleaned_fasta":
+            outputs.extend(get_sample_fcs_final_outputs(wildcards))
+        elif which_one == "saf":
+            outputs.extend(get_sample_saffire_final_outputs(wildcards))
+        elif which_one == "plots":
+            outputs.extend(get_sample_plots_outputs(wildcards))
+        elif which_one == "moddot_plots":
+            outputs.extend(get_sample_moddotplot_outputs(wildcards))
+        elif which_one == "qv":
+            outputs.extend(get_sample_merqury_final_outputs(wildcards))
+    return outputs
 
 localrules: all, gather_outputs_per_sample
+
+
 
 rule all:
     input:
@@ -170,17 +177,48 @@ rule all:
             sample=samples_with_asm
         )
 
+rule get_cleaned_fasta_only:
+    input:
+        lambda wildcards: get_all_outputs(which_one = "cleaned_fasta")
+
+rule get_qv_only:
+    input:
+        lambda wildcards: get_all_outputs(which_one = "qv")
+
+rule get_saf_only:
+    input:
+        lambda wildcards: get_all_outputs(which_one = "saf")
+
+rule get_plots_only:
+    input:
+        lambda wildcards: get_all_outputs(which_one = "plots")
+
+rule get_moddotplots_only:
+    input:
+        lambda wildcards: get_all_outputs(which_one = "moddot_plots")
+
+rule get_stats_only:
+    input:
+        expand("results/{sample}/stats/outputs/summary/{sample}.summary.stats",
+            sample=samples_with_asm
+        )
+        
+rule get_busco_only:
+    input:
+        expand("results/{sample}/compleasm/outputs/summary/{sample}.summary.tsv",
+            sample=samples_with_asm
+        )
+
 
 rule gather_outputs_per_sample:
     input:
-        get_fcs_final_outputs,
-        get_merqury_final_outputs,
-        get_saffire_final_outputs,
-        get_compleasm_final_outputs,
-        get_fasta_stats_outputs,
-        get_moddotplot_outputs,
-        get_plots_outputs,
-        get_nucfreq_config,
+        get_sample_fcs_final_outputs,
+        get_sample_merqury_final_outputs,
+        get_sample_saffire_final_outputs,
+        get_sample_compleasm_final_outputs,
+        get_sample_fasta_stats_outputs,
+        get_sample_moddotplot_outputs,
+        get_sample_plots_outputs
     output:
         flag = touch("results/{sample}/complete_flag/all_done")
 
