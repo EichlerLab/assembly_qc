@@ -85,7 +85,14 @@ def get_compleasm_final_outputs(wildcards):
 
 def get_fasta_stats_outputs(wildcards):
     sample = wildcards.sample
-    return f"results/{sample}/stats/outputs/summary/{sample}.summary.stats"
+    sample_sub = groups[groups["SAMPLE"] == sample]
+    final_outputs = [
+        f"results/{sample}/stats/outputs/summary/{sample}.summary.stats"
+    ] + [
+        f"results/{sample}/stats/outputs/summary_by_hap/{row.HAP}.summary.stats"
+        for idx, row in sample_sub.iterrows()
+    ]
+    return final_outputs
 
 def get_moddotplot_outputs(wildcards):
     if not int(TAXID) == 9606:

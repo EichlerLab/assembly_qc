@@ -477,7 +477,7 @@ rule summarize_full_genome_stats:
         elif len(df_all_hap) > 2:
             ploidy = "Aneuplod"
 
-        qv_df = pd.read_csv(input.sample_qv, sep="\t", header=None, names=["haplotype","error_count", "total_count", "qv","error_rate"]).set_index("haplotype")
+        qv_df = pd.read_csv(input.sample_qv, sep="\t", header=None, names=["haplotype","error_count", "total_count", "qv","error_rate"]).drop_duplicates().set_index("haplotype")
         try:
             quality_value = float(qv_df.loc["Both","qv"])
         except KeyError:

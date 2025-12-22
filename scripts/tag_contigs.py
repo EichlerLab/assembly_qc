@@ -1,4 +1,5 @@
 import os
+import re
 
 def cigar_tuple(cigar):
     """
@@ -87,12 +88,9 @@ def main(snakemake):
                 continue
 
 
-    query2arm2target2info_dict = {}
-
     fout_pq = open(snakemake.params.pq,'w')
     fout_p = open(snakemake.params.p, 'w')
     faln = open(snakemake.params.aln, 'w')
-    pq_contig_tracker = []
     for query, query2arm_dict in query2target2info_dict.items():
         try:
             query_len = seq2len_dict[query]
