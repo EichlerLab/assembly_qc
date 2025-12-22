@@ -6,6 +6,8 @@ from Bio.SeqIO.FastaIO import FastaWriter
 import pysam
 import numpy as np
 import re
+import gzip
+from collections import defaultdict
 
 FCS_SOURCE_DIR = "/net/eichler/vol28/7200/software/pipelines/foreign_contamination_screen"
 MITO_DB = config.get("mito", f"{FCS_SOURCE_DIR}/db/mito_ebv.fa")
@@ -17,7 +19,7 @@ manifest_df = conv_manifest_df.copy()
 
 
 def get_raw_fasta(wildcards):
-    return manifest_df.at[(wildcards.sample, wildcards.hap), "FASTA"]
+    return manifest_df.loc[(wildcards.sample, wildcards.hap), "FASTA"]
 
 def find_gx_report(wildcards):
     (IDS,) = glob_wildcards("results/{sample}/contamination_screening/work/fcs_gx/outputs/{hap}/{gx_name}.fcs_gx_report.txt".format(
@@ -74,7 +76,11 @@ rule remove_short_contigs:
         filtered_fasta = output.filtered_fasta
         below_ten_fasta = filtered_fasta.replace(".filtered.fasta",".below_10bp.fasta")
 
-        raw_fasta_records = list(SeqIO.parse(input.fasta, "fasta"))
+        try:
+            raw_fasta_records = list(SeqIO.parse(input.fasta, "fasta"))
+        except UnicodeDecodeError:
+            with gzip.open(input.fasta, "rt") as input_fasta:
+                raw_fasta_records = list(SeqIO.parse(input_fasta, "fasta"))
         filtered_fasta_records = list()
         below_ten_fasta_records = list()
 
@@ -106,6 +112,7 @@ rule run_fcs_gx:
     resources:
         mem = 16,
         hrs = 12,
+        load = 25,
     params:
         taxid=TAXID,
         GXDB_LOC="/data/scratch/GXDB/gxdb/",
@@ -128,6 +135,7 @@ rule run_fcs_adapter:
     resources:
         mem = 16,
         hrs = 12,
+        load = 25,
     params:
         taxid=TAXID,
         fcs_adaptor_img = f"{FCS_SOURCE_DIR}/fcsadaptor/fcs-adaptor.sif",
@@ -229,9 +237,8 @@ rule extract_mito:
             subrec_seq = str(subrec.seq).upper()
             if row["strand"] == "-":
                 subrec = subrec.reverse_complement(id=True, name=True, description=True)
-
-            new_id = f"{contig}:{int(row['qstart'])}-{int(row['qend'])}"
             num_id += 1
+            new_id = f"{contig}-mt{num_id}"
             subrec.id = new_id
             subrec.name = new_id
             subrec.description = ""
@@ -466,6 +473,7 @@ rule rename_fasta:
     run:
         final_fasta = output.final_fasta
 
+        split_counter = defaultdict(int)
         original_fasta = pysam.FastaFile(input.fasta)
         cleaned_fasta_records = list(SeqIO.parse(input.cleaned_fasta, "fasta"))
         final_fasta_records = list()
@@ -479,7 +487,9 @@ rule rename_fasta:
             if cleaned_sequence == raw_sequence:
                 cleaned_seq_name = original_seq_name
             else:
-                cleaned_seq_name = seq_name.replace(":","_trim_")
+                split_counter[original_seq_name] += 1
+                cleaned_seq_name = f"{original_seq_name}-split{split_counter[original_seq_name]}"
+                # cleaned_seq_name = seq_name.replace(":","_trim_")
             final_fasta_records.append(SeqRecord(Seq(cleaned_sequence), id=cleaned_seq_name, description=""))
         with open(final_fasta, "w") as fout:
             fasta_writer = FastaWriter(fout, wrap=None)
