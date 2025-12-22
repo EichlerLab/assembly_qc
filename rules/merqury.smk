@@ -3,9 +3,7 @@ import glob
 
 wildcard_constraints:
     read_sample="|".join(full_manifest_df["ILLUMINA"].unique()),
-    sample="|".join(full_manifest_df.index),
     read="\d+",
-
 
 
 def find_cleaned_hap_fasta(which_one):
