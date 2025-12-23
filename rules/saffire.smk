@@ -292,7 +292,8 @@ rule check_covered_chromosomes:
     input:
         paf = rules.trim_paf.output.paf
     output:
-        tsv = "results/{sample}/saffire/outputs/chrom_cov/{ref}/{hap}.minimap2.chrom_cov.tsv",
+        chrom_cov_tsv = "results/{sample}/saffire/outputs/chrom_cov/{ref}/{hap}.minimap2.chrom_cov.tsv",
+        contig_chrom_cov_tsv = "results/{sample}/saffire/outputs/chrom_cov/{ref}/{hap}.minimap2.contigs_chrom_cov.tsv",
         flag = "results/{sample}/saffire/work/chrom_cov/flags/{ref}.{hap}.minimap2.done"
     wildcard_constraints:
         ref='[A-Za-z0-9_-]+',
@@ -303,16 +304,32 @@ rule check_covered_chromosomes:
     run:
         from collections import defaultdict
 
+        MIN_COV_LEN = 1_000_000 # 1Mbp
+
+        chroms = [f"chr{i}" for i in range(1,23)] + ["chrX","chrY"]
+    
         chrom_length_dict = dict()
         chrom_intervals = defaultdict(list)
+        
+        contig_length_dict = dict()
+        contig_chrom_cov = defaultdict(lambda: defaultdict(int))
+
         with open(input.paf) as finp:
             read_lines = finp.read().strip().split("\n")
+        
         for line in read_lines:
+            if line.strip() == "":
+                continue
             token = line.split("\t")[:9]
-            chrom, start, end, contigname, chrom_length = token[5], int(token[7]), int(token[8]), token[0], int(token[6])
+            contig_name, contig_length, chrom, start, end, contigname, chrom_length = token[0], int(token[1]), token[5], int(token[7]), int(token[8]), token[0], int(token[6])
+            
             if not chrom in chrom_length_dict:
                 chrom_length_dict[chrom] = chrom_length
+            if not contig_name in contig_length_dict:
+                contig_length_dict[contig_name] = contig_length
+
             chrom_intervals[chrom].append((start,end))
+            contig_chrom_cov[contig_name][chrom] += (end-start)
         
         merged_dict = dict()
         for chrom in sorted(chrom_intervals):
@@ -328,8 +345,9 @@ rule check_covered_chromosomes:
             merged.append((current_start, current_end))
             merged_dict[chrom] = merged
         chroms = [f"chr{i}" for i in range(1,23)]+["chrX","chrY"]
-        with open(output.tsv, "w") as fout:
-            print ("chrom\tcovered_pct", file=fout)
+
+        with open(output.chrom_cov_tsv, "w") as fout_chrom_cov:
+            print ("chrom\tcovered_pct", file=fout_chrom_cov)
             for chrom in chroms:
                 try:
                     covered_length = 0
@@ -339,6 +357,25 @@ rule check_covered_chromosomes:
                     covered_rate = covered_length/chrom_length*100
                 except:
                     covered_rate = 0.0
-                print (f"{chrom}\t{covered_rate:.2f}", file=fout)
+                print (f"{chrom}\t{covered_rate:.2f}", file=fout_chrom_cov)
+
+        with open(output.contig_chrom_cov_tsv, "w") as fout_contigs_chrom_cov:
+            header = ["contig"] + chroms + ["covered_chrom"]
+            print("\t".join(header), file=fout_contigs_chrom_cov)
+
+            for contig in sorted(contig_chrom_cov):
+                contig_len = contig_length_dict.get(contig, 0)
+                row = [contig]
+                touched = []
+
+                for chrom in chroms:
+                    cov_len = contig_chrom_cov[contig].get(chrom, 0)
+                    pct = (cov_len / contig_len * 100) if contig_len > 0 else 0.0
+                    row.append(f"{pct:.2f}")
+                    if cov_len >= MIN_COV_LEN:
+                        touched.append(chrom)
+
+                row.append(",".join(sorted(list(set(touched)),key=lambda x: chroms.index(x))))
+                print("\t".join(row), file=fout_contigs_chrom_cov)
         
         open(output.flag,"w").close()
