@@ -184,6 +184,7 @@ rule get_stats_only:
         expand("results/{sample}/stats/outputs/summary/{sample}.summary.stats",
             sample=samples_with_asm
         )
+        
 rule get_busco_only:
     input:
         expand("results/{sample}/compleasm/outputs/summary/{sample}.summary.tsv",
