@@ -41,6 +41,36 @@ def find_fasta_set_for_full_genome(which_one):
         return outputs[0] if len(outputs) == 1 else outputs
     return inner
 
+
+def find_hap2_and_un_for_nucfreq(wildcards):
+    
+    try:
+        h2_val = full_manifest_df.at[wildcards.sample, "H2"]
+    except KeyError:
+        h2_val = None 
+
+    try:
+        un_val = full_manifest_df.at[wildcards.sample, "UNASSIGNED"]
+    except KeyError:
+        un_val = None 
+
+
+    has_h2 = isinstance(h2_val, str) and h2_val.strip() != "" and os.path.isfile(h2_val)
+    has_un = isinstance(un_val, str) and un_val.strip() != "" and os.path.isfile(un_val)
+
+    haps = []
+    if has_h2:
+        haps.append("hap2")
+    if has_un:
+        haps.append("un")
+
+    outputs = [
+        f"results/{wildcards.sample}/contamination_screening/outputs/final_fasta/{wildcards.sample}_{hap}.fasta"
+        for hap in haps
+    ]
+    return outputs[0] if len(outputs) == 1 else outputs
+
+
 def find_all_hap_summary(wildcards):
     try:
         h2_val = full_manifest_df.at[wildcards.sample, "H2"]
@@ -133,6 +163,76 @@ rule combine_full_genome:
             writer = FastaWriter(fout, wrap=None)
             writer.write_file(records)
         pysam.faidx(output_full_genome)
+
+rule combine_hap2_and_unassigned_fasta:
+    input:
+        hap2_and_un_fasta = find_hap2_and_un_for_nucfreq
+    output:
+        flag = "results/{sample}/contamination_screening/work/hap2_un_merge_for_nucfreq/flags/{sample}.done"
+    params:
+        hap_and_un_fasta = "results/{sample}/contamination_screening/outputs/final_fasta/{sample}_hap2_with_un.fasta"
+    threads: 1,
+    resources:
+        hrs=1,
+        mem=8,
+    run:
+        output_merged_fasta = params.hap_and_un_fasta
+        if isinstance(input.hap2_and_un_fasta, str):
+            input_hap2_and_un_fasta = [input.hap2_and_un_fasta]
+        else:
+            input_hap2_and_un_fasta = input.hap2_and_un_fasta
+        out_flag = output.flag
+        outdir = os.path.dirname(out_flag)
+        os.makedirs(outdir, exist_ok=True)        
+        if len(input_hap2_and_un_fasta) == 2:
+            records = []
+            for fasta in input_hap2_and_un_fasta:
+                records.extend(list(SeqIO.parse(fasta, "fasta")))
+            with open(output_merged_fasta, "w") as fout_fasta:
+                writer = FastaWriter(fout_fasta, wrap=None)
+                writer.write_file(records)
+            pysam.faidx(output_merged_fasta)
+        with open(out_flag,"w") as fout:
+            print (f"{wildcards.sample}.done", file=fout)
+
+rule get_assebmly_eval_config:        
+    input:
+        rules.combine_hap2_and_unassigned_fasta.output.flag
+    output:
+        assembly_eval_config = "results/{sample}/assembly_eval_config/output/config_file/{sample}.config.yaml"
+    threads: 1,
+    resources:
+        hrs=1,
+        mem=4,
+    run:
+        final_fasta_files = glob.glob(f"results/{wildcards.sample}/contamination_screening/outputs/final_fasta/{wildcards.sample}_*.fasta")
+        fasta_dict = dict()
+        for fasta in final_fasta_files:
+            fasta_hap = os.path.basename(fasta).replace(f"{wildcards.sample}_","").split(".")[0]
+            fasta_path = os.path.abspath(fasta)
+            fasta_dict[fasta_hap] = fasta_path
+        hap1_fasta = fasta_dict["hap1"]
+        if "hap2_with_un" in fasta_dict:
+            hap2_fasta = fasta_dict["hap2_with_un"]
+        else:
+            if "hap2" in fasta_dict:
+                hap2_fasta = fasta_dict["hap2"]
+            else:
+                hap2_fasta = hap1_fasta
+        with open(output.assembly_eval_config, "w") as fout:
+            print (f"""
+{wildcards.sample}:
+  fofns:
+    HiFi: HIFI_FOFN
+  type_map:
+    HiFi: winnowmap
+  nuc_opts: -y 100
+  asm_h1: {hap1_fasta}
+  asm_h2: {hap2_fasta}
+  repeat_mask: False
+  species: Human
+                """, file=fout
+            )            
 
 rule combine_full_genome_contigs:
     input:
@@ -235,7 +335,7 @@ rule get_scaffold_stats:
 
 rule get_full_genome_stats:
     input:
-        fasta = rules.combine_full_genome_contigs.output.full_genome,
+        fasta = rules.combine_full_genome.output.full_genome,
         telo_tbl = rules.get_full_genome_telo_stats.output.telo_tbl
     output:
         stats = "results/{sample}/stats/work/fasta_stats/full_genome.stats"
@@ -248,7 +348,7 @@ rule get_full_genome_stats:
 
 rule get_full_genome_contig_stats:
     input:
-        fasta = rules.combine_full_genome.output.full_genome,
+        fasta = rules.combine_full_genome_contigs.output.full_genome,
         telo_tbl = rules.get_full_genome_telo_stats.output.contig_telo_tbl
     output:
         stats = "results/{sample}/stats/work/fasta_stats/full_genome.contig.stats"
@@ -319,6 +419,8 @@ rule summary_hap_stats:
                 "l50_scaffold":"scaffold_l50",
                 "n50_contig":"contig_n50",
                 "n50_scaffold":"scaffold_n50",
+                "aun_contig":"contig_aun",
+                "aun_scaffold":"scaffold_aun",
                 "bases_contig":"total_ungapped_length",
                 "bases_scaffold":"genome_size",
                 "number_of_gaps_scaffold":"gaps_between_scaffolds",
@@ -329,6 +431,7 @@ rule summary_hap_stats:
         selected_columns = ["chrX_ratio","chrY_ratio","quality_value",\
         "number_of_contigs", "number_of_scaffolds","gaps_between_scaffolds",\
         "number_of_near_T2T_contigs", "number_of_near_T2T_scaffolds", "contig_l50","contig_n50","scaffold_l50", "scaffold_n50","total_ungapped_length", "largest_contig_size","gc_content",\
+        "contig_aun", "scaffold_aun", \
         "percent_single_copy","percent_multi_copy","percent_fragmented_copy","percent_missing_copy"
         ]
         df = df[selected_columns]
@@ -374,7 +477,7 @@ rule summarize_full_genome_stats:
         elif len(df_all_hap) > 2:
             ploidy = "Aneuplod"
 
-        qv_df = pd.read_csv(input.sample_qv, sep="\t", header=None, names=["haplotype","error_count", "total_count", "qv","error_rate"]).set_index("haplotype")
+        qv_df = pd.read_csv(input.sample_qv, sep="\t", header=None, names=["haplotype","error_count", "total_count", "qv","error_rate"]).drop_duplicates().set_index("haplotype")
         try:
             quality_value = float(qv_df.loc["Both","qv"])
         except KeyError:

@@ -88,6 +88,47 @@ rule trim_paf:
         """
 
 # added -L param in case the CIGAR is > 65535 since older tools are unable to convert alignments with >65535 CIGAR ops to BAM. (https://lh3.github.io/minimap2/minimap2.html)
+rule filter_paf:
+    input:
+        paf=rules.trim_paf.output.paf,
+    output:
+        filt_paf="results/{sample}/chain_files/work/filter_paf/{ref}/{hap}.filt.paf",
+        filt_invert_paf="results/{sample}/chain_files/work/filter_paf/{ref}/{hap}.filt.invert.paf",
+    wildcard_constraints:
+        ref='[A-Za-z0-9_-]+',
+    threads: 12    
+    singularity:
+        "docker://eichlerlab/rustybam:0.1.33"
+    resources:
+        mem = 12,
+        hrs = 48
+    params:
+        min_aln_len=100_000,
+    shell: """
+        rb filter -a {params.min_aln_len} {input.paf} > {output.filt_paf}
+        rb invert {output.filt_paf} > {output.filt_invert_paf}
+        """
+
+rule make_chain_file:
+    input:
+        filt_paf = rules.filter_paf.output.filt_paf,
+        filt_invert_paf = rules.filter_paf.output.filt_invert_paf
+    output:
+        chain="results/{sample}/chain_files/outputs/{sample}_{hap}_To_{ref}.chain",
+        chain_invert="results/{sample}/chain_files/outputs/{sample}_{hap}_To_{ref}.invert.chain",
+    wildcard_constraints:
+        ref='[A-Za-z0-9_-]+',
+    threads: 12    
+    singularity:
+        "docker://eichlerlab/paf2chain:0.1.1"
+    resources:
+        mem = 12,
+        hrs = 48
+    shell: """
+        paf2chain --input {input.filt_paf} > {output.chain}
+        paf2chain --input {input.filt_invert_paf} > {output.chain_invert}
+        """
+
 rule make_minimap_bam:
     input:
         fa = "results/{sample}/contamination_screening/outputs/final_fasta/{sample}_{hap}.fasta",

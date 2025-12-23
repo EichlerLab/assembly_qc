@@ -89,6 +89,14 @@ def get_sample_saffire_final_outputs(wildcards):
         for idx, row in sample_sub.iterrows()
         for ref in REF_DICT
     ]
+    chain_files = [
+        f"results/{sample}/chain_files/outputs/{sample}_{row.HAP}_To_{ref}.chain"
+        for idx, row in sample_sub.iterrows()
+        for ref in REF_DICT
+    ]
+    if int(TAXID) == 9606:
+        final_outputs += chain_files
+
     return final_outputs
 
 def get_sample_compleasm_final_outputs(wildcards):
@@ -98,7 +106,14 @@ def get_sample_compleasm_final_outputs(wildcards):
 
 def get_sample_fasta_stats_outputs(wildcards):
     sample = wildcards.sample
-    return f"results/{sample}/stats/outputs/summary/{sample}.summary.stats"
+    sample_sub = groups[groups["SAMPLE"] == sample]
+    final_outputs = [
+        f"results/{sample}/stats/outputs/summary/{sample}.summary.stats"
+    ] + [
+        f"results/{sample}/stats/outputs/summary_by_hap/{row.HAP}.summary.stats"
+        for idx, row in sample_sub.iterrows()
+    ]
+    return final_outputs
 
 def get_sample_moddotplot_outputs(wildcards):
     if not int(TAXID) == 9606:
@@ -125,13 +140,15 @@ def get_sample_plots_outputs(wildcards):
         f"results/{sample}/plots/outputs/ideo/{ref}/pdf/{sample}.minimap2.ideoplot.pdf"
         for idx, row in sample_sub.iterrows()
         for ref in REF_DICT
+    ] + [
+        f"results/{sample}/plots/outputs/ideo/{ref}/pdf/{sample}.minimap2.ideoplot_wide.pdf"
+        for idx, row in sample_sub.iterrows()
+        for ref in REF_DICT
+    ] + [
+        f"results/{sample}/plots/outputs/ploidy/CHM13/pdf/{sample}.minimap2.ploidy.pdf"
+        for idx, row in sample_sub.iterrows()
     ]
-    if int(TAXID) == 9606:
-        final_outputs += [
-            f"results/{sample}/plots/outputs/ploidy/{ref}/pdf/{sample}.minimap2.ploidy.pdf"
-            for idx, row in sample_sub.iterrows()
-            for ref in REF_DICT
-        ]
+    #"results/{sample}/plots/outputs/ploidy/{ref}/pdf/{sample}.minimap2.ploidy.pdf"
     return final_outputs
 
 def get_all_outputs(which_one):
@@ -151,6 +168,7 @@ def get_all_outputs(which_one):
     return outputs
 
 localrules: all, gather_outputs_per_sample
+
 
 
 rule all:
