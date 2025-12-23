@@ -390,7 +390,8 @@ rule summary_hap_stats:
                 token = f_un_qv.read().strip().split("\n")[-1].split("\t")
                 qv = float(token[3])
         else: # hap1 or hap2
-            qv_df = pd.read_csv(input.sample_qv, sep="\t", header=None, names=["haplotype","error_count", "total_count", "qv","error_rate"]).set_index("haplotype")
+            qv_df = pd.read_csv(input.sample_qv, sep="\t", header=None, names=["haplotype","error_count", "total_count", "qv","error_rate"]).drop_duplicates().set_index("haplotype")
+            qv_df = qv_df[pd.to_numeric(qv_df["qv"], errors="coerce").notna()]
             qv = float(qv_df.loc[f"{wildcards.sample}_{wildcards.hap}","qv"])
             
         df["quality_value"] = qv
@@ -478,6 +479,8 @@ rule summarize_full_genome_stats:
             ploidy = "Aneuplod"
 
         qv_df = pd.read_csv(input.sample_qv, sep="\t", header=None, names=["haplotype","error_count", "total_count", "qv","error_rate"]).drop_duplicates().set_index("haplotype")
+        qv_df = qv_df[pd.to_numeric(qv_df["qv"], errors="coerce").notna()]
+
         try:
             quality_value = float(qv_df.loc["Both","qv"])
         except KeyError:
