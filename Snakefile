@@ -147,8 +147,10 @@ def get_sample_plots_outputs(wildcards):
     ] + [
         f"results/{sample}/plots/outputs/ploidy/CHM13/pdf/{sample}.minimap2.ploidy.pdf"
         for idx, row in sample_sub.iterrows()
+    ] + [
+        f"results/{sample}/assembly_eval_config/output/config_file/{sample}.config.yaml"
+        for idx, row in sample_sub.iterrows()
     ]
-    #"results/{sample}/plots/outputs/ploidy/{ref}/pdf/{sample}.minimap2.ploidy.pdf"
     return final_outputs
 
 def get_all_outputs(which_one):
