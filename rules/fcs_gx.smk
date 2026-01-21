@@ -226,7 +226,7 @@ rule extract_mito:
 
         out_records = []
         check_dup_seq = dict()
-        num_id = 0
+        num_id = 1
         num_rep_id = 0
         for idx, row in best.iterrows():
             contig = row["qseqid"]
@@ -237,8 +237,11 @@ rule extract_mito:
             subrec_seq = str(subrec.seq).upper()
             if row["strand"] == "-":
                 subrec = subrec.reverse_complement(id=True, name=True, description=True)
-            num_id += 1
             new_id = f"{contig}-mt{num_id}"
+            if HPRC_NAMING:
+                name = full_manifest_df.loc[wildcards.sample, "NAME"]
+                new_id = f"{name}#mt#{contig}-mt{num_id}"
+
             subrec.id = new_id
             subrec.name = new_id
             subrec.description = ""
@@ -248,6 +251,7 @@ rule extract_mito:
                 check_dup_seq[subrec_seq] = []
                 check_dup_seq[subrec_seq].append(new_id)
                 out_records.append(subrec)
+                num_id += 1
             else:
                 check_dup_seq[subrec_seq].append(new_id)
 
@@ -490,6 +494,10 @@ rule rename_fasta:
                 split_counter[original_seq_name] += 1
                 cleaned_seq_name = f"{original_seq_name}-split{split_counter[original_seq_name]}"
                 # cleaned_seq_name = seq_name.replace(":","_trim_")
+            if HPRC_NAMING:
+                name = full_manifest_df.loc[wildcards.sample, "NAME"]
+                hap_name = str(wildcards.hap).replace("hap","")
+                cleaned_seq_name = f"{name}#{hap_name}#{cleaned_seq_name}"
             final_fasta_records.append(SeqRecord(Seq(cleaned_sequence), id=cleaned_seq_name, description=""))
         with open(final_fasta, "w") as fout:
             fasta_writer = FastaWriter(fout, wrap=None)

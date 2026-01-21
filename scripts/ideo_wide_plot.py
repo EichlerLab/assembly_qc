@@ -124,7 +124,6 @@ def load_asm(path, start_vert=0):
         path,
         sep='\t',
         header=None,
-        comment='#',
         engine='python',
         on_bad_lines='skip',
         usecols=[0,1,2,3,4],

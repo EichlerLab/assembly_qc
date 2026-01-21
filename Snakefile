@@ -14,6 +14,7 @@ N50_SCRIPT = "/net/eichler/vol28/7200/software/pipelines/compteam_tools/n50"
 PLOIDY_PLOT_SCRIPT = f"{SNAKEMAKE_DIR}/scripts/ploidy.R"
 TAXID = config.get("TAXID", "9606")
 INCLUDE_MITO = bool(config.get("INCLUDE_MITO", False))
+HPRC_NAMING = bool(config.get("HPRC_NAMING", False))
 REF_DICT = config["REF"]
 
 ## manifest ==================
@@ -90,7 +91,7 @@ def get_sample_saffire_final_outputs(wildcards):
         for ref in REF_DICT
     ]
     chain_files = [
-        f"results/{sample}/chain_files/outputs/{sample}_{row.HAP}_To_{ref}.chain"
+        f"results/{sample}/chain_files/outputs/{ref}_To_{sample}_{row.HAP}.chain"
         for idx, row in sample_sub.iterrows()
         for ref in REF_DICT
     ]
