@@ -203,19 +203,15 @@ rule merqury_run:
     resources:
         mem=lambda wildcards, attempt: (2 ** (attempt-1)) * 4,
         hrs=96,
-    params:
-        un_qv = "results/{sample}/merqury/outputs/{sample}_un.qv",
     threads: 16
     singularity:
         "docker://eichlerlab/merqury:1.3.1"
     shell: """ 
         set -euo pipefail
-
-        if [[ -f {params.un_qv} ]];then
-          rm -f {params.un_qv}
-        fi
-
         outdir="$(dirname {output.qv})"
+        if [[ -d $outdir ]];then
+          rm -rf $outdir
+        fi
         mkdir -p $outdir
         merqury_sh=$(realpath {input.run_script})
         pushd $outdir
@@ -294,9 +290,12 @@ rule merqury_trio_run:
     singularity:
         "docker://eichlerlab/merqury:1.3.1"
     shell: """
-        set -euo pipefail    
+        set -euo pipefail 
 
         outdir="$(dirname {output.png})"
+        if [[ -d $outdir ]];then
+          rm -rf $outdir
+        fi
         mkdir -p $outdir
         merqury_sh=$(realpath {input.run_script})
         pushd $outdir; $merqury_sh; popd
