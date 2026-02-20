@@ -1,2 +1,2 @@
-SAMPLE	H1	H2	UNASSIGNED	ILLUMINA	FOFN	TRIO	MO_ID	FA_ID
-SAMPLE	test_data/asm/verkko.hap1.fasta	test_data/asm/verkko.hap2.fasta	test_data/asm/verkko.unassigned.fasta	SAMPLE	test_data/fofn/reads.fofn	NO	NA	NA
+SAMPLE	NAME	H1	H2	UNASSIGNED	ILLUMINA	FOFN	TRIO	MO_ID	FA_ID
+SAMPLE_verkko	SAMPLE	test_data/asm/verkko.hap1.fasta	test_data/asm/verkko.hap2.fasta	test_data/asm/verkko.unassigned.fasta	SAMPLE	test_data/fofn/reads.fofn	NO	NA	NA

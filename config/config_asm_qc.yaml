@@ -17,4 +17,5 @@ MODE: busco
 
 ### foreign contamination screening
 TAXID: 9606
-
+INCLUDE_MITO: True
+HPRC_NAMING: True
