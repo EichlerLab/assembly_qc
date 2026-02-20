@@ -89,15 +89,18 @@ def get_sample_saffire_final_outputs(wildcards):
         f"results/{sample}/saffire/outputs/chrom_cov/{ref}/{row.HAP}.minimap2.chrom_cov.tsv"
         for idx, row in sample_sub.iterrows()
         for ref in REF_DICT
+    ] + [
+        f"results/{sample}/saffire/outputs/chrom_cov/{ref}/{row.HAP}.minimap2.contigs_chrom_cov.tsv"
+        for idx, row in sample_sub.iterrows()
+        for ref in REF_DICT
     ]
     chain_files = [
-        f"results/{sample}/chain_files/outputs/{ref}_To_{sample}_{row.HAP}.chain"
+        f"results/{sample}/chain_files/outputs/{sample}_{row.HAP}_To_{ref}.chain"
         for idx, row in sample_sub.iterrows()
         for ref in REF_DICT
     ]
     if int(TAXID) == 9606:
         final_outputs += chain_files
-
     return final_outputs
 
 def get_sample_compleasm_final_outputs(wildcards):

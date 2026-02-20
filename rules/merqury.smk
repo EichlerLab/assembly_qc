@@ -198,6 +198,7 @@ rule merqury_run:
     input:
         run_script=rules.merqury_script.output.run_script,
     output:
+        flag = "results/{sample}/merqury/flags/{sample}.done",
         qv="results/{sample}/merqury/outputs/{sample}.qv",
     resources:
         mem=lambda wildcards, attempt: (2 ** (attempt-1)) * 4,
@@ -220,6 +221,7 @@ rule merqury_run:
         pushd $outdir
         $merqury_sh
         popd
+        touch {output.flag}
         """
 
 

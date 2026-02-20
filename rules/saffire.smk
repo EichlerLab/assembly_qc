@@ -114,8 +114,8 @@ rule make_chain_file:
         filt_paf = rules.filter_paf.output.filt_paf,
         filt_invert_paf = rules.filter_paf.output.filt_invert_paf
     output:
-        chain="results/{sample}/chain_files/outputs/{ref}_To_{sample}_{hap}.chain",
-        chain_invert="results/{sample}/chain_files/outputs/{ref}_To_{sample}_{hap}.invert.chain",
+        chain="results/{sample}/chain_files/outputs/{sample}_{hap}_To_{ref}.chain",
+        chain_invert="results/{sample}/chain_files/outputs/{sample}_{hap}_To_{ref}.invert.chain",
     wildcard_constraints:
         ref='[A-Za-z0-9_-]+',
     threads: 12    
