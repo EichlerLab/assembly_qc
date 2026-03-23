@@ -157,6 +157,15 @@ def get_sample_plots_outputs(wildcards):
     ]
     return final_outputs
 
+def get_sample_smaht_dsa_metadata(wildcards):
+    sample = wildcards.sample
+    sample_sub = groups[groups["SAMPLE"] == sample]
+    final_outputs = [
+        f"results/{sample}/smaht_dsa_metdata/outputs/{sample}.{row.HAP}.DSA_ExternalQualityMetric.tsv"
+        for idx, row in sample_sub.iterrows()
+    ]
+    return final_outputs
+
 def get_all_outputs(which_one):
     outputs = []
     for sample in samples_with_asm:
@@ -171,6 +180,8 @@ def get_all_outputs(which_one):
             outputs.extend(get_sample_moddotplot_outputs(wildcards))
         elif which_one == "qv":
             outputs.extend(get_sample_merqury_final_outputs(wildcards))
+        elif which_one == "smaht_dsa_metadata":
+            outputs.extend(get_sample_smaht_dsa_metadata(wildcards))
     return outputs
 
 localrules: all, gather_outputs_per_sample
@@ -203,6 +214,10 @@ rule get_moddotplots_only:
     input:
         lambda wildcards: get_all_outputs(which_one = "moddot_plots")
 
+rule get_smaht_dsa_metadata_only:
+    input:
+        lambda wildcards: get_all_outputs(which_one = "smaht_dsa_metadata")
+
 rule get_stats_only:
     input:
         expand("results/{sample}/stats/outputs/summary/{sample}.summary.stats",
@@ -224,7 +239,8 @@ rule gather_outputs_per_sample:
         get_sample_compleasm_final_outputs,
         get_sample_fasta_stats_outputs,
         get_sample_moddotplot_outputs,
-        get_sample_plots_outputs
+        get_sample_plots_outputs,
+        get_sample_smaht_dsa_metadata
     output:
         flag = touch("results/{sample}/complete_flag/all_done")
 

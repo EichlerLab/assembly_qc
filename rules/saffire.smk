@@ -47,7 +47,7 @@ rule copy_ref_fasta:
     shell: """
         cp {input.raw_ref} {output.ref}
         samtools faidx {output.ref}
-        cut -f1 {output.fai}> {output.genome_index}
+        cut -f1 {output.fai} > {output.genome_index}
         """
 
 rule make_minimap_paf:
@@ -67,7 +67,9 @@ rule make_minimap_paf:
         mem = 12,
         hrs = 48
     shell: """
-        minimap2 -c -t {threads} -K {resources.mem}G --cs {params.map_opts} --secondary=no --eqx -Y {input.ref} {input.fa} > {output.paf}
+        tmp_output="{output.paf}.tmp"
+        minimap2 -c -t {threads} -K {resources.mem}G --cs {params.map_opts} --secondary=no --eqx -Y {input.ref} {input.fa} > $tmp_output
+        mv $tmp_output {output.paf}
         """
 
 rule trim_paf:
@@ -84,7 +86,9 @@ rule trim_paf:
         mem = 12,
         hrs = 48
     shell: """
-        rustybam trim-paf --remove-contained {input.paf} > {output.paf}
+        tmp_output="{output.paf}.tmp"
+        rustybam trim-paf --remove-contained {input.paf} > $tmp_output
+        mv $tmp_output {output.paf}
         """
 
 # added -L param in case the CIGAR is > 65535 since older tools are unable to convert alignments with >65535 CIGAR ops to BAM. (https://lh3.github.io/minimap2/minimap2.html)
@@ -105,8 +109,12 @@ rule filter_paf:
     params:
         min_aln_len=100_000,
     shell: """
-        rb filter -a {params.min_aln_len} {input.paf} > {output.filt_paf}
-        rb invert {output.filt_paf} > {output.filt_invert_paf}
+        tmp_output_paf="{output.filt_paf}.tmp"
+        tmp_output_inv_paf="{output.filt_invert_paf}.tmp"
+        rb filter -a {params.min_aln_len} {input.paf} > $tmp_output_paf
+        mv $tmp_output_paf {output.filt_paf}
+        rb invert {output.filt_paf} > $tmp_output_inv_paf
+        mv $tmp_output_inv_paf {output.filt_invert_paf}
         """
 
 rule make_chain_file:
@@ -114,8 +122,8 @@ rule make_chain_file:
         filt_paf = rules.filter_paf.output.filt_paf,
         filt_invert_paf = rules.filter_paf.output.filt_invert_paf
     output:
-        chain="results/{sample}/chain_files/outputs/{sample}_{hap}_To_{ref}.chain",
-        chain_invert="results/{sample}/chain_files/outputs/{sample}_{hap}_To_{ref}.invert.chain",
+        chain = "results/{sample}/chain_files/outputs/{sample}_{hap}_To_{ref}.chain",
+        chain_invert = "results/{sample}/chain_files/outputs/{sample}_{hap}_To_{ref}.invert.chain",
     wildcard_constraints:
         ref='[A-Za-z0-9_-]+',
     threads: 12    
@@ -125,8 +133,12 @@ rule make_chain_file:
         mem = 12,
         hrs = 48
     shell: """
-        paf2chain --input {input.filt_paf} > {output.chain}
-        paf2chain --input {input.filt_invert_paf} > {output.chain_invert}
+        tmp_output_chain="{output.chain}.tmp"
+        tmp_output_inv_chain="{output.chain_invert}.tmp"
+        paf2chain --input {input.filt_paf} > $tmp_output_chain
+        mv $tmp_output_chain {output.chain}
+        paf2chain --input {input.filt_invert_paf} > $tmp_output_inv_chain
+        mv $tmp_output_inv_chain {output.chain_invert}
         """
 
 rule make_minimap_bam:
@@ -146,7 +158,9 @@ rule make_minimap_bam:
         mem = 12,
         hrs = 48
     shell: """
-        minimap2 -c -t {threads} -K {resources.mem}G --cs -a {params.map_opts} --MD --secondary=no --eqx -Y -L {input.ref} {input.fa} | samtools view -S -b /dev/stdin | samtools sort -@ {threads} -o {output.bam}
+        tmp_output="{output.bam}.tmp"
+        minimap2 -c -t {threads} -K {resources.mem}G --cs -a {params.map_opts} --MD --secondary=no --eqx -Y -L {input.ref} {input.fa} | samtools view -S -b /dev/stdin | samtools sort -@ {threads} -o $tmp_output
+        mv $tmp_output {output.bam}
         """
 
 rule make_bed:
@@ -164,7 +178,9 @@ rule make_bed:
         mem = 12,
         hrs = 1
     shell: """
-        awk -vOFS="\t" '{{print $6,$8,$9,$1,$12}}' {input.paf} | bedtools sort -g {input.genome_index} > {output.bed}
+        tmp_output="{output.bed}.tmp"
+        awk -vOFS="\t" '{{print $6,$8,$9,$1,$12}}' {input.paf} | bedtools sort -g {input.genome_index} > $tmp_output
+        mv $tmp_output {output.bed}
         """
 
 rule split_paf:
@@ -213,7 +229,8 @@ rule trim_break_orient_paf:
         paf = "results/{sample}/saffire/work/split_paf/{ref}/tmp/{hap}.minimap2.{scatteritem}.paf"
     output:
         contig = temp("results/{sample}/saffire/work/split_paf/{ref}/tmp/{hap}.minimap2.{scatteritem}.orient.paf"),
-        broken = temp("results/{sample}/saffire/work/split_paf/{ref}/tmp/{hap}.minimap2.{scatteritem}.broken.paf")
+        broken = temp("results/{sample}/saffire/work/split_paf/{ref}/tmp/{hap}.minimap2.{scatteritem}.broken.paf"),
+        flag = "results/{sample}/saffire/work/split_paf/flag/{ref}/{hap}.minimap2.{scatteritem}.broken_paf.done"
     wildcard_constraints:
         ref='[A-Za-z0-9_-]+',             
     threads: 1
@@ -225,13 +242,14 @@ rule trim_break_orient_paf:
         mem = 24,
         hrs = 24
     shell: """
-        if [[ ! -s {input}.paf ]];then
+        if [[ ! -s {input.paf} ]];then
             : > {output.contig}
             : > {output.broken}
         else
             rustybam orient {input.paf} | rustybam trim-paf | rb filter --paired-len 1000000 > {output.contig}
             rustybam break-paf --max-size {params.sv_size} {output.contig} > {output.broken}
         fi
+        touch {output.flag}
         """
 
 rule concat_pafs:
@@ -239,7 +257,6 @@ rule concat_pafs:
         paf = find_all_trimmed_paf
     output:
         paf = "results/{sample}/saffire/outputs/merged_paf/{ref}/minimap2.concat.paf",
-        flag = "results/{sample}/saffire/work/merged_paf/flags/{ref}.minimap2.done"
     wildcard_constraints:
         ref='[A-Za-z0-9_-]+',             
     threads:1 
@@ -247,17 +264,16 @@ rule concat_pafs:
         mem=4,
         hrs=1
     shell: """
-        cat {input.paf} > {output.paf}
-        touch {output.flag}
+        tmp_output="{output.paf}.tmp"
+        cat {input.paf} > $tmp_output
+        mv $tmp_output {output.paf}
         """
 
 rule combine_paf:
     input:
         paf = find_contigs,
-        flag = rules.split_paf.output.flag
     output:
         paf = "results/{sample}/saffire/work/combine_paf/{ref}/tmp/{hap}.minimap2.broken.paf",
-        flag = "results/{sample}/saffire/work/combine_paf/flags/{ref}.{hap}.minimap2.done"
     wildcard_constraints:
         ref='[A-Za-z0-9_-]+',             
     threads: 1
@@ -265,8 +281,9 @@ rule combine_paf:
         mem = 8,
         hrs = 24
     shell: """
-        cat {input.paf} > {output.paf}
-        touch {output.flag}
+        tmp_output="{output.paf}.tmp"
+        cat {input.paf} > $tmp_output
+        mv $tmp_output {output.paf}
         """
 
 rule saff_out:
@@ -274,7 +291,6 @@ rule saff_out:
         paf = rules.combine_paf.output.paf
     output:
         saf = "results/{sample}/saffire/outputs/safs/{ref}/{hap}.minimap2.saf",
-        flag = "results/{sample}/saffire/work/make_saf/flags/{ref}.{hap}.minimap2.done"
     wildcard_constraints:
         ref='[A-Za-z0-9_-]+',             
     threads: 1
@@ -284,8 +300,9 @@ rule saff_out:
         mem = 8,
         hrs = 24
     shell: """
-        rb stats --paf {input.paf} > {output.saf}
-        touch {output.flag}
+        tmp_output="{output.saf}.tmp"
+        rb stats --paf {input.paf} > $tmp_output
+        mv $tmp_output {output.saf}
         """
 
 rule check_covered_chromosomes:
@@ -360,22 +377,28 @@ rule check_covered_chromosomes:
                 print (f"{chrom}\t{covered_rate:.2f}", file=fout_chrom_cov)
 
         with open(output.contig_chrom_cov_tsv, "w") as fout_contigs_chrom_cov:
-            header = ["contig"] + chroms + ["covered_chrom"]
+            header = ["contig"] + chroms + ["covered_chrom","best_target_chrom"]
             print("\t".join(header), file=fout_contigs_chrom_cov)
 
             for contig in sorted(contig_chrom_cov):
                 contig_len = contig_length_dict.get(contig, 0)
                 row = [contig]
                 touched = []
+                best_target_chrom = "undefined"
+                best_target_pct = 0.0
 
                 for chrom in chroms:
                     cov_len = contig_chrom_cov[contig].get(chrom, 0)
                     pct = (cov_len / contig_len * 100) if contig_len > 0 else 0.0
+                    if pct > best_target_pct:
+                        best_target_chrom = chrom
+                        best_target_pct = pct
                     row.append(f"{pct:.2f}")
                     if cov_len >= MIN_COV_LEN:
                         touched.append(chrom)
 
                 row.append(",".join(sorted(list(set(touched)),key=lambda x: chroms.index(x))))
+                row.append(best_target_chrom)
                 print("\t".join(row), file=fout_contigs_chrom_cov)
         
         open(output.flag,"w").close()

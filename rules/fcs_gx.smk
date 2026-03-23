@@ -70,7 +70,7 @@ rule remove_short_contigs:
         filtered_fai = "results/{sample}/contamination_screening/work/fastq_cleaning/short_contig_flitering/cleaned_fasta/{hap}.filtered.fasta.fai"
     threads: 1
     resources:
-        mem = 8,
+        mem = 24,
         hrs = 2,
     run:
         filtered_fasta = output.filtered_fasta
@@ -157,7 +157,9 @@ rule blast_mito:
         hrs = 12,
     singularity: "docker://eichlerlab/ncbi-tk:0.1"
     shell: """
-        blastn -num_threads {threads} -query {input.filt_fasta} -db {input.mito_db} -outfmt 6 -evalue 1e-30 > {output.blast_out}
+        tmp_output="{output.blast_out}.tmp"
+        blastn -num_threads {threads} -query {input.filt_fasta} -db {input.mito_db} -outfmt 6 -evalue 1e-30 > $tmp_output
+        mv $tmp_output {output.blast_out}
         """
 
 
@@ -173,7 +175,9 @@ rule filter_mito:
         hrs = 12,
     singularity: "docker://eichlerlab/binf-basics:0.1"
     shell: """
-        bedtools coverage -a <( awk -vOFS="\\t" '{{print $1,"0",$2}}' {input.filt_fai} ) -b <( cut -f 1,7,8 {input.blast_out} ) | awk -vOFS="\\t" '{{ if ($NF >= 0.5) print $1,$2,$3}}' > {output.mito_bed}
+        tmp_output="{output.mito_bed}.tmp"
+        bedtools coverage -a <( awk -vOFS="\\t" '{{print $1,"0",$2}}' {input.filt_fai} ) -b <( cut -f 1,7,8 {input.blast_out} ) | awk -vOFS="\\t" '{{ if ($NF >= 0.5) print $1,$2,$3}}' > $tmp_output
+        mv $tmp_output {output.mito_bed}
         """
 
 
@@ -375,7 +379,9 @@ rule coerce_bed:
     singularity: "docker://eichlerlab/binf-basics:0.1"
     # removed sort to keep the order of contig names
     shell: """
-        bedtools complement -i {input.trim_file} -g {input.filt_fai}| awk '{{if ( $3 - $2 > 1000 ) print $1":"$2+1"-"$3}}' > {output.regions_file}
+        tmp_output="{output.regions_file}.tmp"
+        bedtools complement -i {input.trim_file} -g {input.filt_fai}| awk '{{if ( $3 - $2 > 1000 ) print $1":"$2+1"-"$3}}' > $tmp_output
+        mv $tmp_output {output.regions_file}
         """
 
 
@@ -394,7 +400,7 @@ rule trim_sequence:
     ### removed sed 's/:/#/g'
     shell: """
         samtools faidx -r {input.regions_file} {input.filt_fasta} > {output.cleaned_fasta}
-        samtools faidx {output.cleaned_fasta} 
+        samtools faidx {output.cleaned_fasta}
         """
 
 
@@ -410,7 +416,9 @@ rule blast_rdna:
         hrs=12,
     singularity: "docker://eichlerlab/ncbi-tk:0.1"
     shell: """
-        blastn -num_threads {threads} -query {input.filt_fasta} -db {input.rdna_db} -outfmt 6 -evalue 1e-30 > {output.blast_out}
+        tmp_output="{output.blast_out}.tmp"
+        blastn -num_threads {threads} -query {input.filt_fasta} -db {input.rdna_db} -outfmt 6 -evalue 1e-30 > $tmp_output
+        mv $tmp_output {output.blast_out}
         """
 
 
@@ -427,12 +435,16 @@ rule filter_rdna:
         hrs = 12,
     singularity: "docker://eichlerlab/binf-basics:0.1"
     shell: """
-        bedtools coverage -a <( awk -vOFS="\\t" '{{print $1,"0",$2}}' {input.fai} ) -b <( cut -f 1,7,8 {input.blast_out} ) | awk -vOFS="\\t" '{{ if ($NF >= 0.95) print $1}}' > {output.rdna_ctg}
+        tmp_output_rdna="{output.rdna_ctg}.tmp"
+        tmp_output_other="{output.other_ctg}.tmp"
+        bedtools coverage -a <( awk -vOFS="\\t" '{{print $1,"0",$2}}' {input.fai} ) -b <( cut -f 1,7,8 {input.blast_out} ) | awk -vOFS="\\t" '{{ if ($NF >= 0.95) print $1}}' > $tmp_output_rdna
+        mv $tmp_output_rdna {output.rdna_ctg}
         if [[ $( cat {output.rdna_ctg} | wc -l ) == 0 ]]; then
-            cp {input.fai} {output.other_ctg}
+            cp {input.fai} $tmp_output_other
         else
-            cat {output.rdna_ctg} | tr "\\n" "|" | sed 's/|$//' | xargs -i grep -vE {{}} {input.fai} |  cut -f 1 > {output.other_ctg}
+            cat {output.rdna_ctg} | tr "\\n" "|" | sed 's/|$//' | xargs -i grep -vE {{}} {input.fai} |  cut -f 1 > $tmp_output_other
         fi 
+        mv $tmp_output_other {output.other_ctg}
         """
 
 
@@ -446,6 +458,7 @@ rule split_rdna:
         cleaned_fasta = "results/{sample}/contamination_screening/work/rdna_cleaning/cleaned_fasta/{hap}.gx_adapt_rdna_cleaned.fasta", # adapt & r-DNA-cleaned
         cleaned_fai = "results/{sample}/contamination_screening/work/rdna_cleaning/cleaned_fasta/{hap}.gx_adapt_rdna_cleaned.fasta.fai",
         rdna_fasta = "results/{sample}/contamination_screening/outputs/rdna_fasta/{hap}-rdna.fasta",
+        flag = "results/{sample}/contamination_screening/flag/rdna_fasta/{hap}-rdna.done"
     threads: 1
     resources:
         mem = 4,
@@ -460,6 +473,7 @@ rule split_rdna:
             samtools faidx -r {input.others} {input.fasta} > {output.cleaned_fasta}
         fi 
         samtools faidx {output.cleaned_fasta}
+        touch {output.flag}
         """
 
 rule rename_fasta:

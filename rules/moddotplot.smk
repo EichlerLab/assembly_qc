@@ -85,7 +85,6 @@ rule liftover:
         paf="results/{sample}/saffire/work/alignments/CHM13/pafs/{hap}.minimap2.paf"
     output:
         paf= "results/{sample}/moddotplot/work/liftover/CHM13/pafs/{hap}/{region}.paf",
-        flag = "results/{sample}/moddotplot/work/liftover/CHM13/flags/{hap}.{region}.paf_done"
     resources:
         mem=24,
         hrs=2,
@@ -93,8 +92,9 @@ rule liftover:
     singularity:
         "docker://eichlerlab/rustybam:0.1.33"
     shell: """
-        rustybam liftover --bed {input.bed} {input.paf} > {output.paf}
-        touch {output.flag}
+        tmp_output="{output.paf}.tmp"
+        rustybam liftover --bed {input.bed} {input.paf} > $tmp_output
+        mv $tmp_output {output.paf}
         """
 
 rule trim_paf_moddot:
@@ -102,7 +102,6 @@ rule trim_paf_moddot:
         paf= rules.liftover.output.paf
     output:
         paf = "results/{sample}/moddotplot/work/liftover/CHM13/trimmed_pafs/{hap}/{region}.paf",
-        flag = "results/{sample}/moddotplot/work/liftover/CHM13/flags/{hap}.{region}.trimmed_paf_done",
     threads: 8
     singularity:
         "docker://eichlerlab/rustybam:0.1.33"
@@ -110,8 +109,9 @@ rule trim_paf_moddot:
         mem = 12,
         hrs = 48
     shell: """
-        rustybam trim-paf {input.paf} > {output.paf}
-        touch {output.flag}
+        tmp_output="{output.paf}.tmp"
+        rustybam trim-paf {input.paf} > $tmp_output
+        mv $tmp_output {output.paf}
         """
 
 rule paf_stats:
@@ -119,7 +119,6 @@ rule paf_stats:
         paf=rules.trim_paf_moddot.output.paf
     output:
         stats = "results/{sample}/moddotplot/work/liftover/CHM13/paf_stats/{hap}/{region}.stats",
-        flag = "results/{sample}/moddotplot/work/liftover/CHM13/flags/{hap}.{region}.paf_stats_done"
     resources:
         mem=12,
         hrs=2,
@@ -127,8 +126,9 @@ rule paf_stats:
     singularity:
         "docker://eichlerlab/rustybam:0.1.33"
     shell: """
-        rustybam stats --paf --qbed {input.paf} > {output.stats}
-        touch {output.flag}
+        tmp_output="{output.stats}.tmp"
+        rustybam stats --paf --qbed {input.paf} > $tmp_output
+        mv $tmp_output {output.stats}
         """
 
 rule tag_contigs:

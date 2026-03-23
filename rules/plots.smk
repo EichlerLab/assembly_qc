@@ -115,8 +115,7 @@ rule get_ploidy_plot:
     output:
         pdf = "results/{sample}/plots/outputs/ploidy/{ref}/pdf/{sample}.minimap2.ploidy.pdf",
         summary = "results/{sample}/plots/outputs/ploidy/{ref}/summary/{sample}.minimap2.ploidy_summary.txt",
-    threads:
-        1
+    threads: 1
     resources:
         mem = 8,
         hrs = 4,
