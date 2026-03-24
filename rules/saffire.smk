@@ -56,6 +56,7 @@ rule make_minimap_paf:
         ref = "resources/reference/{ref}/genome.fa"
     output:
         paf = "results/{sample}/saffire/work/alignments/{ref}/pafs/{hap}.minimap2.paf",
+        flag = "results/{sample}/saffire/flags/make_minimap_paf.{ref}.{hap}.done",
     wildcard_constraints:
         ref='[A-Za-z0-9_-]+',
     threads: 12
@@ -67,9 +68,9 @@ rule make_minimap_paf:
         mem = 12,
         hrs = 48
     shell: """
-        tmp_output="{output.paf}.tmp"
-        minimap2 -c -t {threads} -K {resources.mem}G --cs {params.map_opts} --secondary=no --eqx -Y {input.ref} {input.fa} > $tmp_output
-        mv $tmp_output {output.paf}
+        set -euo pipefail
+        minimap2 -c -t {threads} -K {resources.mem}G --cs {params.map_opts} --secondary=no --eqx -Y {input.ref} {input.fa} > {output.paf}
+        touch {output.flag}
         """
 
 rule trim_paf:
@@ -77,6 +78,7 @@ rule trim_paf:
         paf = "results/{sample}/saffire/work/alignments/{ref}/pafs/{hap}.minimap2.paf",
     output:
         paf = "results/{sample}/saffire/outputs/trimmed_pafs/{ref}/{hap}.minimap2.trimmed.paf",
+        flag = "results/{sample}/saffire/flags/trim_paf.{ref}.{hap}.done"
     wildcard_constraints:
         ref='[A-Za-z0-9_-]+',
     threads: 12
@@ -86,9 +88,9 @@ rule trim_paf:
         mem = 12,
         hrs = 48
     shell: """
-        tmp_output="{output.paf}.tmp"
-        rustybam trim-paf --remove-contained {input.paf} > $tmp_output
-        mv $tmp_output {output.paf}
+        set -euo pipefail
+        rustybam trim-paf --remove-contained {input.paf} > {output.paf}
+        touch {output.flag}
         """
 
 # added -L param in case the CIGAR is > 65535 since older tools are unable to convert alignments with >65535 CIGAR ops to BAM. (https://lh3.github.io/minimap2/minimap2.html)
@@ -98,6 +100,7 @@ rule filter_paf:
     output:
         filt_paf="results/{sample}/chain_files/work/filter_paf/{ref}/{hap}.filt.paf",
         filt_invert_paf="results/{sample}/chain_files/work/filter_paf/{ref}/{hap}.filt.invert.paf",
+        flag = "results/{sample}/chain_files/flags/filter_paf.{ref}.{hap}.done"
     wildcard_constraints:
         ref='[A-Za-z0-9_-]+',
     threads: 12    
@@ -109,12 +112,10 @@ rule filter_paf:
     params:
         min_aln_len=100_000,
     shell: """
-        tmp_output_paf="{output.filt_paf}.tmp"
-        tmp_output_inv_paf="{output.filt_invert_paf}.tmp"
-        rb filter -a {params.min_aln_len} {input.paf} > $tmp_output_paf
-        mv $tmp_output_paf {output.filt_paf}
-        rb invert {output.filt_paf} > $tmp_output_inv_paf
-        mv $tmp_output_inv_paf {output.filt_invert_paf}
+        set -euo pipefail    
+        rb filter -a {params.min_aln_len} {input.paf} > {output.filt_paf}
+        rb invert {output.filt_paf} > {output.filt_invert_paf}
+        touch {output.flag}
         """
 
 rule make_chain_file:
@@ -124,6 +125,7 @@ rule make_chain_file:
     output:
         chain = "results/{sample}/chain_files/outputs/{sample}_{hap}_To_{ref}.chain",
         chain_invert = "results/{sample}/chain_files/outputs/{sample}_{hap}_To_{ref}.invert.chain",
+        flag = "results/{sample}/chain_files/flags/make_chain_file.{ref}.{hap}.done"
     wildcard_constraints:
         ref='[A-Za-z0-9_-]+',
     threads: 12    
@@ -133,12 +135,10 @@ rule make_chain_file:
         mem = 12,
         hrs = 48
     shell: """
-        tmp_output_chain="{output.chain}.tmp"
-        tmp_output_inv_chain="{output.chain_invert}.tmp"
-        paf2chain --input {input.filt_paf} > $tmp_output_chain
-        mv $tmp_output_chain {output.chain}
-        paf2chain --input {input.filt_invert_paf} > $tmp_output_inv_chain
-        mv $tmp_output_inv_chain {output.chain_invert}
+        set -euo pipefail    
+        paf2chain --input {input.filt_paf} > {output.chain}
+        paf2chain --input {input.filt_invert_paf} > {output.chain_invert}
+        touch {output.flag}
         """
 
 rule make_minimap_bam:
@@ -147,6 +147,7 @@ rule make_minimap_bam:
         ref = "resources/reference/{ref}/genome.fa"
     output:
         bam = "results/{sample}/saffire/work/alignments/{ref}/bams/{hap}.minimap2.bam",
+        flag = "results/{sample}/saffire/flags/make_minimap_bam.{ref}.{hap}.done",
     wildcard_constraints:
         ref='[A-Za-z0-9_-]+',        
     threads: 12
@@ -158,9 +159,9 @@ rule make_minimap_bam:
         mem = 12,
         hrs = 48
     shell: """
-        tmp_output="{output.bam}.tmp"
-        minimap2 -c -t {threads} -K {resources.mem}G --cs -a {params.map_opts} --MD --secondary=no --eqx -Y -L {input.ref} {input.fa} | samtools view -S -b /dev/stdin | samtools sort -@ {threads} -o $tmp_output
-        mv $tmp_output {output.bam}
+        set -euo pipefail    
+        minimap2 -c -t {threads} -K {resources.mem}G --cs -a {params.map_opts} --MD --secondary=no --eqx -Y -L {input.ref} {input.fa} | samtools view -S -b /dev/stdin | samtools sort -@ {threads} -o {output.bam}
+        touch {output.flag}
         """
 
 rule make_bed:
@@ -169,6 +170,7 @@ rule make_bed:
         genome_index = "resources/reference/{ref}/genome_index.txt"
     output:
         bed = "results/{sample}/saffire/work/alignments/{ref}/beds/{hap}.minimap2.bed",
+        flag = "results/{sample}/saffire/flags/make_bed.{ref}.{hap}.done",
     wildcard_constraints:
         ref='[A-Za-z0-9_-]+',              
     threads: 1
@@ -178,17 +180,17 @@ rule make_bed:
         mem = 12,
         hrs = 1
     shell: """
-        tmp_output="{output.bed}.tmp"
-        awk -vOFS="\t" '{{print $6,$8,$9,$1,$12}}' {input.paf} | bedtools sort -g {input.genome_index} > $tmp_output
-        mv $tmp_output {output.bed}
+        set -euo pipefail
+        awk -vOFS="\t" '{{print $6,$8,$9,$1,$12}}' {input.paf} | bedtools sort -g {input.genome_index} > {output.bed}
+        touch {output.flag}
         """
 
 rule split_paf:
     input:
         paf = "results/{sample}/saffire/work/alignments/{ref}/pafs/{hap}.minimap2.paf",
     output:
-        flag = temp(scatter.split("results/{{sample}}/saffire/work/split_paf/{{ref}}/tmp/{{hap}}.minimap2.{scatteritem}.paf")),
-        temp_paf = temp("results/{sample}/saffire/work/split_paf/{ref}/tmp/{hap}_uniform.minimap2.paf")
+        scatter_paf = temp(scatter.split("results/{{sample}}/saffire/work/split_paf/{{ref}}/tmp/{{hap}}.minimap2.{scatteritem}.paf")),
+        temp_paf = temp("results/{sample}/saffire/work/split_paf/{ref}/tmp/{hap}.minimap2.uniform.paf"),
     wildcard_constraints:
         ref='[A-Za-z0-9_-]+',             
     threads: 1
@@ -230,7 +232,7 @@ rule trim_break_orient_paf:
     output:
         contig = temp("results/{sample}/saffire/work/split_paf/{ref}/tmp/{hap}.minimap2.{scatteritem}.orient.paf"),
         broken = temp("results/{sample}/saffire/work/split_paf/{ref}/tmp/{hap}.minimap2.{scatteritem}.broken.paf"),
-        flag = "results/{sample}/saffire/work/split_paf/flag/{ref}/{hap}.minimap2.{scatteritem}.broken_paf.done"
+        flag = "results/{sample}/saffire/flags/{ref}/trim_break_orient_paf/{hap}.{scatteritem}.done"
     wildcard_constraints:
         ref='[A-Za-z0-9_-]+',             
     threads: 1
@@ -242,6 +244,7 @@ rule trim_break_orient_paf:
         mem = 24,
         hrs = 24
     shell: """
+        set -euo pipefail    
         if [[ ! -s {input.paf} ]];then
             : > {output.contig}
             : > {output.broken}
@@ -257,6 +260,7 @@ rule concat_pafs:
         paf = find_all_trimmed_paf
     output:
         paf = "results/{sample}/saffire/outputs/merged_paf/{ref}/minimap2.concat.paf",
+        flag = "results/{sample}/flags/{ref}/concat_paf.done",
     wildcard_constraints:
         ref='[A-Za-z0-9_-]+',             
     threads:1 
@@ -264,9 +268,9 @@ rule concat_pafs:
         mem=4,
         hrs=1
     shell: """
-        tmp_output="{output.paf}.tmp"
-        cat {input.paf} > $tmp_output
-        mv $tmp_output {output.paf}
+        set -euo pipefail
+        cat {input.paf} > {output.paf}
+        touch {output.flag}
         """
 
 rule combine_paf:
@@ -274,6 +278,7 @@ rule combine_paf:
         paf = find_contigs,
     output:
         paf = "results/{sample}/saffire/work/combine_paf/{ref}/tmp/{hap}.minimap2.broken.paf",
+        flag = "results/{sample}/saffire/flags/{ref}/combine_paf.{hap}.done"
     wildcard_constraints:
         ref='[A-Za-z0-9_-]+',             
     threads: 1
@@ -281,9 +286,9 @@ rule combine_paf:
         mem = 8,
         hrs = 24
     shell: """
-        tmp_output="{output.paf}.tmp"
-        cat {input.paf} > $tmp_output
-        mv $tmp_output {output.paf}
+        set -euo pipefail
+        cat {input.paf} > {output.paf}
+        touch {output.flag}
         """
 
 rule saff_out:
@@ -300,18 +305,19 @@ rule saff_out:
         mem = 8,
         hrs = 24
     shell: """
+        set -euo pipefail    
         tmp_output="{output.saf}.tmp"
         rb stats --paf {input.paf} > $tmp_output
         mv $tmp_output {output.saf}
         """
 
-rule check_covered_chromosomes:
+rule check_covered_chroms:
     input:
         paf = rules.trim_paf.output.paf
     output:
         chrom_cov_tsv = "results/{sample}/saffire/outputs/chrom_cov/{ref}/{hap}.minimap2.chrom_cov.tsv",
         contig_chrom_cov_tsv = "results/{sample}/saffire/outputs/chrom_cov/{ref}/{hap}.minimap2.contigs_chrom_cov.tsv",
-        flag = "results/{sample}/saffire/work/chrom_cov/flags/{ref}.{hap}.minimap2.done"
+        flag = "results/{sample}/saffire/flags/{ref}/check_covered_chroms.{hap}.done"
     wildcard_constraints:
         ref='[A-Za-z0-9_-]+',
     threads: 1

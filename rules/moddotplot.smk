@@ -32,7 +32,7 @@ except KeyError:
 
 
 def find_tigs_flag(wildcards):
-    return [ f"results/{wildcards.sample}/moddotplot/work/find_tigs/flags/{wildcards.hap}.{region}.done" for region in bed_df.index ]
+    return [ f"results/{wildcards.sample}/moddotplot/flags/tag_contigs.{wildcards.hap}.{region}.done" for region in bed_df.index ]
 
 def find_pq_tigs(wildcards):
     return [ f"results/{wildcards.sample}/moddotplot/work/find_tigs/beds/{wildcards.hap}/{region}_pq_contig.bed" for region in bed_df.index ]
@@ -41,7 +41,7 @@ def find_p_tigs(wildcards):
     return [ f"results/{wildcards.sample}/moddotplot/work/find_tigs/beds/{wildcards.hap}/{region}_p_contig.bed" for region in bed_df.index ]
 
 def get_all_flag(wildcards):
-    return [ f"results/{wildcards.sample}/moddotplot/work/selfplot/flags/{wildcards.hap}.{region}.done" for region in bed_df.index]
+    return [ f"results/{wildcards.sample}/moddotplot/flags/pq_selfplot.{wildcards.hap}.{region}.done" for region in bed_df.index]
 
 rule summarize_moddot_results:
     input:
@@ -85,6 +85,7 @@ rule liftover:
         paf="results/{sample}/saffire/work/alignments/CHM13/pafs/{hap}.minimap2.paf"
     output:
         paf= "results/{sample}/moddotplot/work/liftover/CHM13/pafs/{hap}/{region}.paf",
+        flag = "results/{sample}/moddotplot/flags/liftover.{hap}.{region}.done",
     resources:
         mem=24,
         hrs=2,
@@ -92,9 +93,10 @@ rule liftover:
     singularity:
         "docker://eichlerlab/rustybam:0.1.33"
     shell: """
+        set -euo pipefail    
         tmp_output="{output.paf}.tmp"
-        rustybam liftover --bed {input.bed} {input.paf} > $tmp_output
-        mv $tmp_output {output.paf}
+        rustybam liftover --bed {input.bed} {input.paf} > {output.paf}
+        touch {output.flag}
         """
 
 rule trim_paf_moddot:
@@ -102,6 +104,7 @@ rule trim_paf_moddot:
         paf= rules.liftover.output.paf
     output:
         paf = "results/{sample}/moddotplot/work/liftover/CHM13/trimmed_pafs/{hap}/{region}.paf",
+        flag = "results/{sample}/moddotplot/flags/trim_paf_moddot.{hap}.{region}.done"
     threads: 8
     singularity:
         "docker://eichlerlab/rustybam:0.1.33"
@@ -109,9 +112,9 @@ rule trim_paf_moddot:
         mem = 12,
         hrs = 48
     shell: """
-        tmp_output="{output.paf}.tmp"
-        rustybam trim-paf {input.paf} > $tmp_output
-        mv $tmp_output {output.paf}
+        set -euo pipefail    
+        rustybam trim-paf {input.paf} > {output.paf}
+        touch {output.flag}
         """
 
 rule paf_stats:
@@ -126,6 +129,7 @@ rule paf_stats:
     singularity:
         "docker://eichlerlab/rustybam:0.1.33"
     shell: """
+        set -euo pipefail    
         tmp_output="{output.stats}.tmp"
         rustybam stats --paf --qbed {input.paf} > $tmp_output
         mv $tmp_output {output.stats}
@@ -136,7 +140,7 @@ rule tag_contigs:
         paf = rules.trim_paf_moddot.output.paf,
         paf_stats = rules.paf_stats.output.stats
     output:
-        flag = "results/{sample}/moddotplot/work/find_tigs/flags/{hap}.{region}.done"
+        flag = "results/{sample}/moddotplot/flags/tag_contigs.{hap}.{region}.done"
     params:
         pq = "results/{sample}/moddotplot/work/find_tigs/beds/{hap}/{region}_pq_contig.bed",
         p = "results/{sample}/moddotplot/work/find_tigs/beds/{hap}/{region}_p_contig.bed",
@@ -154,7 +158,7 @@ rule get_pq_fa:
         flag = rules.tag_contigs.output.flag,
         hap = rules.rename_fasta.output.final_fasta
     output: 
-        flag = "results/{sample}/moddotplot/work/get_pq_tigs/flags/{hap}.{region}.done",
+        flag = "results/{sample}/moddotplot/flags/get_pq_fa.{hap}.{region}.done",
     params:
         fa = "results/{sample}/moddotplot/work/get_pq_tigs/fasta/{hap}/{region}.pq_contig.fa",
         bed = "results/{sample}/moddotplot/work/find_tigs/beds/{hap}/{region}_pq_contig.bed",
@@ -193,7 +197,7 @@ rule pq_selfplot:
         tag_contig_flag = rules.tag_contigs.output.flag,
         get_pq_fa_flag = rules.get_pq_fa.output.flag,
     output:
-        flag = "results/{sample}/moddotplot/work/selfplot/flags/{hap}.{region}.done"
+        flag = "results/{sample}/moddotplot/flags/pq_selfplot.{hap}.{region}.done"
     params:
         fa = "results/{sample}/moddotplot/work/get_pq_tigs/fasta/{hap}/{region}.pq_contig.fa",
         bed = "results/{sample}/moddotplot/work/find_tigs/beds/{hap}/{region}_pq_contig.bed"
@@ -205,6 +209,7 @@ rule pq_selfplot:
     singularity:
         "docker://eichlerlab/moddotplot:0.9.0"
     shell: """
+        set -euo pipefail    
         outdir=$(dirname {output.flag} | sed "s/work\/selfplot\/flags/outputs\/plots\/{wildcards.hap}/g")
         if [[ ! -d $outdir ]];then
             mkdir -p $outdir

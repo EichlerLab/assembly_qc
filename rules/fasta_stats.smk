@@ -168,7 +168,7 @@ rule combine_hap2_and_unassigned_fasta:
     input:
         hap2_and_un_fasta = find_hap2_and_un_for_nucfreq
     output:
-        flag = "results/{sample}/contamination_screening/work/hap2_un_merge_for_nucfreq/flags/{sample}.done"
+        flag = "results/{sample}/contamination_screening/flags/combine_hap2_and_unassigned_fasta.done"
     params:
         hap_and_un_fasta = "results/{sample}/contamination_screening/outputs/final_fasta/{sample}_hap2_with_un.fasta"
     threads: 1,
@@ -268,6 +268,7 @@ rule get_telo_stats:
     output:
         scaffold_telo_tbl = "results/{sample}/stats/work/telo/{hap}.scaffold.telo.tbl",
         contig_telo_tbl = "results/{sample}/stats/work/telo/{hap}.contig.telo.tbl",
+        flag = "results/{sample}/stats/flags/get_telo_stats.{hap}.done"
     singularity:
         "docker://eichlerlab/binf-basics:0.1",
     threads: 1,
@@ -275,12 +276,10 @@ rule get_telo_stats:
         hrs=1,
         mem=6,
     shell: """
-        tmp_scaffold_tbl="{output.scaffold_telo_tbl}.tmp"
-        tmp_contig_tbl="{output.contig_telo_tbl}.tmp"
-        echo -e "seq_name\tstart\tend\tseq_length" > {output.scaffold_telo_tbl} && seqtk telo {input.scaffold_fasta} >> $tmp_scaffold_tbl
-        mv $tmp_scaffold_tbl {output.scaffold_telo_tbl}
-        echo -e "seq_name\tstart\tend\tseq_length" > {output.contig_telo_tbl} && seqtk telo {input.contig_fasta} >> $tmp_contig_tbl
-        mv $tmp_contig_tbl {output.contig_telo_tbl}
+        set -euo pipefail
+        echo -e "seq_name\tstart\tend\tseq_length" > {output.scaffold_telo_tbl} && seqtk telo {input.scaffold_fasta} >> {output.scaffold_telo_tbl}
+        echo -e "seq_name\tstart\tend\tseq_length" > {output.contig_telo_tbl} && seqtk telo {input.contig_fasta} >> {output.contig_telo_tbl}
+        touch {output.flag}
         """
 
 rule get_full_genome_telo_stats:
@@ -290,6 +289,7 @@ rule get_full_genome_telo_stats:
     output:
         telo_tbl = "results/{sample}/stats/work/telo/full_genome.telo.tbl",
         contig_telo_tbl = "results/{sample}/stats/work/telo/full_genome_contigs.telo.tbl",
+        flag = "results/{sample}/stats/flags/get_full_genome_telo_stats.done"
     singularity:
         "docker://eichlerlab/binf-basics:0.1",
     threads: 1,
@@ -297,12 +297,10 @@ rule get_full_genome_telo_stats:
         hrs=1,
         mem=8,
     shell: """
-        tmp_telo_tbl="{output.telo_tbl}.tmp"
-        tmp_contig_telo_tbl="{output.contig_telo_tbl}.tmp"
-        echo -e "seq_name\tstart\tend\tseq_length" > {output.telo_tbl} && seqtk telo {input.full_genome_fasta} >> $tmp_telo_tbl
-        mv $tmp_telo_tbl {output.telo_tbl}
-        echo -e "seq_name\tstart\tend\tseq_length" > {output.contig_telo_tbl} && seqtk telo {input.full_genome_contig_fasta} >> $tmp_contig_telo_tbl
-        mv $tmp_contig_telo_tbl {output.contig_telo_tbl}
+        set -euo pipefail
+        echo -e "seq_name\tstart\tend\tseq_length" > {output.telo_tbl} && seqtk telo {input.full_genome_fasta} >> {output.telo_tbl}
+        echo -e "seq_name\tstart\tend\tseq_length" > {output.contig_telo_tbl} && seqtk telo {input.full_genome_contig_fasta} >> {output.contig_telo_tbl}
+        touch {output.flag}
         """    
 
 rule get_contig_stats:
