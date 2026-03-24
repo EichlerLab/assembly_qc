@@ -132,14 +132,13 @@ rule run_meryl:
     output:
         meryl=temp(directory("resources/meryl/{read_sample}/{read}.meryl")),
     resources:
-        mem=lambda wildcards, attempt: attempt * 120,
+        mem=lambda wildcards, attempt: attempt * 12,
         hrs=48,
-    threads: 1
+    threads: 12
     singularity:
         "docker://eichlerlab/merqury:1.3.1"
-    shell:
-        """
-        meryl k=21 count memory={resources.mem} {input.fastq} output {output.meryl}
+    shell: """
+        meryl k=21 count threads={threads} memory={resources.mem} {input.fastq} output {output.meryl}
         """
 
 
@@ -149,13 +148,12 @@ rule meryl_combine:
     output:
         meryl=directory("resources/meryl/{read_sample}/{read_sample}_all.meryl"),
     resources:
-        mem=lambda wildcards, attempt: (2 ** (attempt-1)) * 128,
+        mem=lambda wildcards, attempt: (2 ** (attempt-1)) * 256,
         hrs=48,
     threads: 1
     singularity:
         "docker://eichlerlab/merqury:1.3.1"
-    shell:
-        """
+    shell: """
         if [[ $( echo {input.meryl} | wc -w ) == 1 ]]; then
             cp -rl {input.meryl} {output.meryl}
         else

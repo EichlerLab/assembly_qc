@@ -55,7 +55,7 @@ rule summarize_moddot_results:
     run:
         header = ["Haplotype"]+acros
         called = [[wildcards.sample]]
-        plot_dir=f"results/{wildcards.sample}/moddotplot/outputs/plots/{wildcards.hap}"
+        plot_dir=f"results/{wildcards.sample}/moddotplot/outputs/pq_selfplots/{wildcards.hap}"
         for chrom in acros:
             region_name = bed_df[bed_df["chr"] == chrom].index[0]
             pdf_files = glob.glob(f"{plot_dir}/{region_name}_*_FULL.pdf")
@@ -210,7 +210,7 @@ rule pq_selfplot:
         "docker://eichlerlab/moddotplot:0.9.0"
     shell: """
         set -euo pipefail    
-        outdir=$(dirname {output.flag} | sed "s/work\/selfplot\/flags/outputs\/plots\/{wildcards.hap}/g")
+        outdir=$(dirname {output.flag} | sed "s/flags/outputs\/pq_selfplots\/{wildcards.hap}/g")
         if [[ ! -d $outdir ]];then
             mkdir -p $outdir
         fi
