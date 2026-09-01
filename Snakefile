@@ -63,7 +63,7 @@ def get_sample_fcs_final_outputs(wildcards):
         f"results/{sample}/contamination_screening/outputs/final_fasta/{sample}_{row.HAP}.fasta"
         for idx, row in sample_sub.iterrows()
     ]
-    if INCLUDE_MITO and (int(TAXID) == 9696):
+    if INCLUDE_MITO and (int(TAXID) == 9606):
         outputs += [
             f"results/{sample}/contamination_screening/outputs/mito_fasta/{row.HAP}-mt.fasta"
             for idx, row in sample_sub.iterrows()
